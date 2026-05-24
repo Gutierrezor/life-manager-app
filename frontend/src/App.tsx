@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { api } from './api/api';
 import './App.css';
 
-type Tab = 'tasks' | 'reminders' | 'agenda' | 'expenses';
+type Tab = 'reminders' | 'agenda' | 'expenses' | 'habits';
 
 type Task = {
   id: number;
@@ -39,7 +39,7 @@ type AgendaEvent = {
 };
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('reminders');
+  const [activeTab, setActiveTab] = useState<Tab>('agenda');
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -49,10 +49,12 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [taskForm, setTaskForm] = useState({
+  const [agendaForm, setAgendaForm] = useState({
     title: '',
     description: '',
-    priority: 'MEDIUM',
+    startTime: '',
+    endTime: '',
+    location: '',
   });
 
   const [expenseForm, setExpenseForm] = useState({
@@ -69,12 +71,10 @@ function App() {
     priority: 'MEDIUM',
   });
 
-  const [agendaForm, setAgendaForm] = useState({
+  const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
-    startTime: '',
-    endTime: '',
-    location: '',
+    priority: 'MEDIUM',
   });
 
   async function loadData() {
@@ -95,100 +95,10 @@ function App() {
     loadData();
   }, []);
 
-  const headerTitle = useMemo(() => {
-    const titles: Record<Tab, string> = {
-      tasks: 'Tareas',
-      reminders: 'Recordatorios',
-      agenda: 'Calendario',
-      expenses: 'Finanzas',
-    };
-
-    return titles[activeTab];
-  }, [activeTab]);
-
-  async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
+  async function createAgenda(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!taskForm.title.trim()) return;
 
-    setLoading(true);
-
-    try {
-      await api.post('/tasks', {
-        title: taskForm.title,
-        description: taskForm.description || undefined,
-        priority: taskForm.priority,
-        status: 'PENDING',
-      });
-
-      setTaskForm({ title: '', description: '', priority: 'MEDIUM' });
-      setShowForm(false);
-      await loadData();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreateExpense(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!expenseForm.title.trim() || !expenseForm.amount) return;
-
-    setLoading(true);
-
-    try {
-      await api.post('/expenses', {
-        title: expenseForm.title,
-        amount: Number(expenseForm.amount),
-        category: expenseForm.category,
-        description: expenseForm.description || undefined,
-      });
-
-      setExpenseForm({
-        title: '',
-        amount: '',
-        category: 'FOOD',
-        description: '',
-      });
-
-      setShowForm(false);
-      await loadData();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreateReminder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!reminderForm.title.trim() || !reminderForm.remindAt) return;
-
-    setLoading(true);
-
-    try {
-      await api.post('/reminders', {
-        title: reminderForm.title,
-        description: reminderForm.description || undefined,
-        remindAt: new Date(reminderForm.remindAt).toISOString(),
-        priority: reminderForm.priority,
-        status: 'PENDING',
-      });
-
-      setReminderForm({
-        title: '',
-        description: '',
-        remindAt: '',
-        priority: 'MEDIUM',
-      });
-
-      setShowForm(false);
-      await loadData();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreateAgenda(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!agendaForm.title.trim() || !agendaForm.startTime || !agendaForm.endTime)
-      return;
+    if (!agendaForm.title || !agendaForm.startTime || !agendaForm.endTime) return;
 
     setLoading(true);
 
@@ -216,394 +126,588 @@ function App() {
     }
   }
 
-  function renderStats() {
-    if (activeTab === 'tasks') {
-      return (
-        <>
-          <StatCard value={tasks.length} label="TOTAL" />
-          <StatCard
-            value={tasks.filter((task) => task.status === 'COMPLETED').length}
-            label="LISTAS"
-          />
-          <StatCard
-            value={tasks.filter((task) => task.status === 'PENDING').length}
-            label="PENDIENTES"
-          />
-          <StatCard
-            value={tasks.filter((task) => task.priority === 'HIGH').length}
-            label="ALTA PRIORIDAD"
-          />
-        </>
-      );
+  async function createExpense(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!expenseForm.title || !expenseForm.amount) return;
+
+    setLoading(true);
+
+    try {
+      await api.post('/expenses', {
+        title: expenseForm.title,
+        amount: Number(expenseForm.amount),
+        category: expenseForm.category,
+        description: expenseForm.description || undefined,
+      });
+
+      setExpenseForm({
+        title: '',
+        amount: '',
+        category: 'FOOD',
+        description: '',
+      });
+
+      setShowForm(false);
+      await loadData();
+    } finally {
+      setLoading(false);
     }
-
-    if (activeTab === 'expenses') {
-      const total = expenses.reduce(
-        (sum, expense) => sum + Number(expense.amount),
-        0,
-      );
-
-      return (
-        <>
-          <StatCard value={expenses.length} label="REGISTROS" />
-          <StatCard value={`$${total.toLocaleString('es-CO')}`} label="TOTAL" />
-          <StatCard
-            value={expenses.filter((expense) => expense.category === 'FOOD').length}
-            label="COMIDA"
-          />
-          <StatCard
-            value={expenses.filter((expense) => expense.category === 'OTHER').length}
-            label="OTROS"
-          />
-        </>
-      );
-    }
-
-    if (activeTab === 'agenda') {
-      return (
-        <>
-          <StatCard value={agenda.length} label="EVENTOS" />
-          <StatCard value={agenda.filter(Boolean).length} label="PROGRAMADOS" />
-          <StatCard
-            value={agenda.filter((event) => event.location).length}
-            label="CON UBICACIÓN"
-          />
-          <StatCard value={0} label="HOY" />
-        </>
-      );
-    }
-
-    return (
-      <>
-        <StatCard value={reminders.length} label="TOTAL" />
-        <StatCard
-          value={reminders.filter((reminder) => reminder.status === 'DONE').length}
-          label="LISTOS"
-        />
-        <StatCard
-          value={reminders.filter((reminder) => reminder.status === 'PENDING').length}
-          label="PENDIENTES"
-        />
-        <StatCard
-          value={reminders.filter((reminder) => reminder.priority === 'HIGH').length}
-          label="ALTA PRIORIDAD"
-        />
-      </>
-    );
   }
 
-  function renderForm() {
-    if (!showForm) return null;
+  async function createReminder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    if (activeTab === 'tasks') {
-      return (
-        <form className="form-panel" onSubmit={handleCreateTask}>
-          <input
-            placeholder="Título de la tarea"
-            value={taskForm.title}
-            onChange={(event) =>
-              setTaskForm({ ...taskForm, title: event.target.value })
-            }
-          />
+    if (!reminderForm.title || !reminderForm.remindAt) return;
 
-          <input
-            placeholder="Descripción"
-            value={taskForm.description}
-            onChange={(event) =>
-              setTaskForm({ ...taskForm, description: event.target.value })
-            }
-          />
+    setLoading(true);
 
-          <select
-            value={taskForm.priority}
-            onChange={(event) =>
-              setTaskForm({ ...taskForm, priority: event.target.value })
-            }
-          >
-            <option value="LOW">Baja</option>
-            <option value="MEDIUM">Media</option>
-            <option value="HIGH">Alta</option>
-          </select>
+    try {
+      await api.post('/reminders', {
+        title: reminderForm.title,
+        description: reminderForm.description || undefined,
+        remindAt: new Date(reminderForm.remindAt).toISOString(),
+        priority: reminderForm.priority,
+        status: 'PENDING',
+      });
 
-          <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
-        </form>
-      );
+      setReminderForm({
+        title: '',
+        description: '',
+        remindAt: '',
+        priority: 'MEDIUM',
+      });
+
+      setShowForm(false);
+      await loadData();
+    } finally {
+      setLoading(false);
     }
-
-    if (activeTab === 'expenses') {
-      return (
-        <form className="form-panel" onSubmit={handleCreateExpense}>
-          <input
-            placeholder="Nombre del gasto"
-            value={expenseForm.title}
-            onChange={(event) =>
-              setExpenseForm({ ...expenseForm, title: event.target.value })
-            }
-          />
-
-          <input
-            type="number"
-            placeholder="Valor"
-            value={expenseForm.amount}
-            onChange={(event) =>
-              setExpenseForm({ ...expenseForm, amount: event.target.value })
-            }
-          />
-
-          <select
-            value={expenseForm.category}
-            onChange={(event) =>
-              setExpenseForm({ ...expenseForm, category: event.target.value })
-            }
-          >
-            <option value="FOOD">Comida</option>
-            <option value="TRANSPORT">Transporte</option>
-            <option value="STUDY">Estudio</option>
-            <option value="HEALTH">Salud</option>
-            <option value="ENTERTAINMENT">Entretenimiento</option>
-            <option value="SERVICES">Servicios</option>
-            <option value="OTHER">Otro</option>
-          </select>
-
-          <input
-            placeholder="Descripción"
-            value={expenseForm.description}
-            onChange={(event) =>
-              setExpenseForm({ ...expenseForm, description: event.target.value })
-            }
-          />
-
-          <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
-        </form>
-      );
-    }
-
-    if (activeTab === 'agenda') {
-      return (
-        <form className="form-panel" onSubmit={handleCreateAgenda}>
-          <input
-            placeholder="Título del evento"
-            value={agendaForm.title}
-            onChange={(event) =>
-              setAgendaForm({ ...agendaForm, title: event.target.value })
-            }
-          />
-
-          <input
-            placeholder="Descripción"
-            value={agendaForm.description}
-            onChange={(event) =>
-              setAgendaForm({ ...agendaForm, description: event.target.value })
-            }
-          />
-
-          <input
-            type="datetime-local"
-            value={agendaForm.startTime}
-            onChange={(event) =>
-              setAgendaForm({ ...agendaForm, startTime: event.target.value })
-            }
-          />
-
-          <input
-            type="datetime-local"
-            value={agendaForm.endTime}
-            onChange={(event) =>
-              setAgendaForm({ ...agendaForm, endTime: event.target.value })
-            }
-          />
-
-          <input
-            placeholder="Ubicación"
-            value={agendaForm.location}
-            onChange={(event) =>
-              setAgendaForm({ ...agendaForm, location: event.target.value })
-            }
-          />
-
-          <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
-        </form>
-      );
-    }
-
-    return (
-      <form className="form-panel" onSubmit={handleCreateReminder}>
-        <input
-          placeholder="Título del recordatorio"
-          value={reminderForm.title}
-          onChange={(event) =>
-            setReminderForm({ ...reminderForm, title: event.target.value })
-          }
-        />
-
-        <input
-          placeholder="Descripción"
-          value={reminderForm.description}
-          onChange={(event) =>
-            setReminderForm({ ...reminderForm, description: event.target.value })
-          }
-        />
-
-        <input
-          type="datetime-local"
-          value={reminderForm.remindAt}
-          onChange={(event) =>
-            setReminderForm({ ...reminderForm, remindAt: event.target.value })
-          }
-        />
-
-        <select
-          value={reminderForm.priority}
-          onChange={(event) =>
-            setReminderForm({ ...reminderForm, priority: event.target.value })
-          }
-        >
-          <option value="LOW">Baja</option>
-          <option value="MEDIUM">Media</option>
-          <option value="HIGH">Alta</option>
-        </select>
-
-        <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
-      </form>
-    );
   }
 
-  function renderList() {
-    if (activeTab === 'tasks') {
-      return tasks.map((task) => (
-        <ListItem
-          key={task.id}
-          title={task.title}
-          subtitle={`${task.status} · ${task.priority}`}
-        />
-      ));
-    }
+  async function createTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    if (activeTab === 'expenses') {
-      return expenses.map((expense) => (
-        <ListItem
-          key={expense.id}
-          title={expense.title}
-          subtitle={`$${Number(expense.amount).toLocaleString('es-CO')} · ${
-            expense.category
-          }`}
-        />
-      ));
-    }
+    if (!taskForm.title) return;
 
-    if (activeTab === 'agenda') {
-      return agenda.map((event) => (
-        <ListItem
-          key={event.id}
-          title={event.title}
-          subtitle={`${event.location ?? 'Sin ubicación'} · ${formatDate(
-            event.startTime,
-          )}`}
-        />
-      ));
-    }
+    setLoading(true);
 
-    return reminders.map((reminder) => (
-      <ListItem
-        key={reminder.id}
-        title={reminder.title}
-        subtitle={`${reminder.status} · ${reminder.priority} · ${formatDate(
-          reminder.remindAt,
-        )}`}
-      />
-    ));
+    try {
+      await api.post('/tasks', {
+        title: taskForm.title,
+        description: taskForm.description || undefined,
+        priority: taskForm.priority,
+        status: 'PENDING',
+      });
+
+      setTaskForm({
+        title: '',
+        description: '',
+        priority: 'MEDIUM',
+      });
+
+      setShowForm(false);
+      await loadData();
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const totalExpenses = expenses.reduce(
+    (total, expense) => total + Number(expense.amount),
+    0,
+  );
+
+  const completedTasks = tasks.filter((task) => task.status === 'COMPLETED').length;
+  const pendingTasks = tasks.filter((task) => task.status !== 'COMPLETED').length;
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <h1>MiHub</h1>
-          <p>Panel personal para tareas, recordatorios, calendario y finanzas.</p>
+    <main className="app">
+      <header className="navbar">
+        <div className="brand">
+          <span>✦</span>
+          <strong>MiHub</strong>
         </div>
 
-        <span className="plan-badge">Plan gratuito</span>
+        <nav className="nav-actions">
+          <button
+            className={activeTab === 'reminders' ? 'active' : ''}
+            onClick={() => {
+              setActiveTab('reminders');
+              setShowForm(false);
+            }}
+          >
+            🔔 Recordatorios
+          </button>
+
+          <button
+            className={activeTab === 'agenda' ? 'active' : ''}
+            onClick={() => {
+              setActiveTab('agenda');
+              setShowForm(false);
+            }}
+          >
+            📅 Calendario
+          </button>
+
+          <button
+            className={activeTab === 'expenses' ? 'active' : ''}
+            onClick={() => {
+              setActiveTab('expenses');
+              setShowForm(false);
+            }}
+          >
+            📊 Finanzas
+          </button>
+
+          <button
+            className={activeTab === 'habits' ? 'active' : ''}
+            onClick={() => {
+              setActiveTab('habits');
+              setShowForm(false);
+            }}
+          >
+            🔥 Hábitos
+          </button>
+        </nav>
       </header>
 
-      <nav className="tabs">
-        <button
-          className={activeTab === 'reminders' ? 'active' : ''}
-          onClick={() => setActiveTab('reminders')}
-        >
-          🔔 Recordatorios
-        </button>
+      {activeTab === 'agenda' && (
+        <section>
+          <SectionHeader
+            title="Calendario"
+            buttonText="+ Nuevo evento"
+            onClick={() => setShowForm(!showForm)}
+          />
 
-        <button
-          className={activeTab === 'agenda' ? 'active' : ''}
-          onClick={() => setActiveTab('agenda')}
-        >
-          📅 Calendario
-        </button>
-
-        <button
-          className={activeTab === 'expenses' ? 'active' : ''}
-          onClick={() => setActiveTab('expenses')}
-        >
-          💰 Finanzas
-        </button>
-
-        <button
-          className={activeTab === 'tasks' ? 'active' : ''}
-          onClick={() => setActiveTab('tasks')}
-        >
-          ✅ Hábitos
-        </button>
-      </nav>
-
-      <section className="section-header">
-        <div>
-          <h2>{headerTitle}</h2>
-          <p>Gestiona y consulta la información conectada a PostgreSQL.</p>
-        </div>
-
-        <button className="new-button" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cerrar' : '+ Nuevo'}
-        </button>
-      </section>
-
-      {renderForm()}
-
-      <section className="stats-grid">{renderStats()}</section>
-
-      <section className="list-panel">
-        <div className="list-title">☰ Lista</div>
-
-        <div className="list-content">
-          {renderList().length > 0 ? (
-            renderList()
-          ) : (
-            <div className="empty-state">
-              <span>⌁</span>
-              <p>Sin registros. Crea uno nuevo.</p>
-            </div>
+          {showForm && (
+            <form className="form-panel" onSubmit={createAgenda}>
+              <input
+                placeholder="Título del evento"
+                value={agendaForm.title}
+                onChange={(e) =>
+                  setAgendaForm({ ...agendaForm, title: e.target.value })
+                }
+              />
+              <input
+                placeholder="Descripción"
+                value={agendaForm.description}
+                onChange={(e) =>
+                  setAgendaForm({ ...agendaForm, description: e.target.value })
+                }
+              />
+              <input
+                type="datetime-local"
+                value={agendaForm.startTime}
+                onChange={(e) =>
+                  setAgendaForm({ ...agendaForm, startTime: e.target.value })
+                }
+              />
+              <input
+                type="datetime-local"
+                value={agendaForm.endTime}
+                onChange={(e) =>
+                  setAgendaForm({ ...agendaForm, endTime: e.target.value })
+                }
+              />
+              <input
+                placeholder="Ubicación"
+                value={agendaForm.location}
+                onChange={(e) =>
+                  setAgendaForm({ ...agendaForm, location: e.target.value })
+                }
+              />
+              <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+            </form>
           )}
-        </div>
-      </section>
+
+          <div className="calendar-layout">
+            <article className="panel calendar-panel">
+              <div className="calendar-header">
+                <button>‹</button>
+                <h2>Mayo 2026</h2>
+                <button>›</button>
+              </div>
+
+              <div className="calendar-grid">
+                {['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SÁ'].map((day) => (
+                  <span className="day-name" key={day}>
+                    {day}
+                  </span>
+                ))}
+
+                {Array.from({ length: 35 }, (_, index) => {
+                  const day = index - 4;
+                  const isCurrent = day === 24;
+
+                  return (
+                    <span
+                      key={index}
+                      className={isCurrent ? 'calendar-day selected' : 'calendar-day'}
+                    >
+                      {day > 0 && day <= 31 ? day : ''}
+                    </span>
+                  );
+                })}
+              </div>
+            </article>
+
+            <article className="panel events-panel">
+              <PanelTitle icon="📅" title="Próximos eventos" />
+
+              {agenda.length === 0 ? (
+                <EmptyState text="Sin eventos próximos" />
+              ) : (
+                agenda.map((event) => (
+                  <ListRow
+                    key={event.id}
+                    title={event.title}
+                    subtitle={`${formatDate(event.startTime)} · ${
+                      event.location ?? 'Sin ubicación'
+                    }`}
+                  />
+                ))
+              )}
+            </article>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'expenses' && (
+        <section>
+          <SectionHeader
+            title="Finanzas"
+            buttonText="+ Transacción"
+            onClick={() => setShowForm(!showForm)}
+          />
+
+          {showForm && (
+            <form className="form-panel" onSubmit={createExpense}>
+              <input
+                placeholder="Nombre del gasto"
+                value={expenseForm.title}
+                onChange={(e) =>
+                  setExpenseForm({ ...expenseForm, title: e.target.value })
+                }
+              />
+              <input
+                type="number"
+                placeholder="Valor"
+                value={expenseForm.amount}
+                onChange={(e) =>
+                  setExpenseForm({ ...expenseForm, amount: e.target.value })
+                }
+              />
+              <select
+                value={expenseForm.category}
+                onChange={(e) =>
+                  setExpenseForm({ ...expenseForm, category: e.target.value })
+                }
+              >
+                <option value="FOOD">Comida</option>
+                <option value="TRANSPORT">Transporte</option>
+                <option value="STUDY">Estudio</option>
+                <option value="HEALTH">Salud</option>
+                <option value="ENTERTAINMENT">Entretenimiento</option>
+                <option value="SERVICES">Servicios</option>
+                <option value="OTHER">Otro</option>
+              </select>
+              <input
+                placeholder="Descripción"
+                value={expenseForm.description}
+                onChange={(e) =>
+                  setExpenseForm({ ...expenseForm, description: e.target.value })
+                }
+              />
+              <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+            </form>
+          )}
+
+          <section className="finance-stats">
+            <StatCard value="$0" label="INGRESOS" color="green" />
+            <StatCard
+              value={`$${totalExpenses.toLocaleString('es-CO')}`}
+              label="GASTOS"
+              color="red"
+            />
+            <StatCard
+              value={`-$${totalExpenses.toLocaleString('es-CO')}`}
+              label="BALANCE"
+              color="green"
+            />
+            <StatCard value={expenses.length} label="MOVIMIENTOS" color="yellow" />
+          </section>
+
+          <div className="finance-layout">
+            <article className="panel">
+              <PanelTitle icon="◔" title="Por categoría" />
+
+              {expenses.length === 0 ? (
+                <EmptyState text="Sin gastos aún" />
+              ) : (
+                expenses.map((expense) => (
+                  <ListRow
+                    key={expense.id}
+                    title={expense.title}
+                    subtitle={`$${Number(expense.amount).toLocaleString(
+                      'es-CO',
+                    )} · ${expense.category}`}
+                  />
+                ))
+              )}
+            </article>
+
+            <article className="panel">
+              <PanelTitle icon="◎" title="Meta de ahorro" />
+              <div className="saving-box">
+                <p>Meta de ahorro</p>
+                <div className="saving-line">
+                  <span>Ahorrado: $0</span>
+                  <span>Meta: $0</span>
+                </div>
+                <div className="progress">
+                  <span />
+                </div>
+                <small>0% · Faltan $0</small>
+                <button className="outline-button">✎ Editar meta</button>
+              </div>
+            </article>
+          </div>
+
+          <article className="panel movements-panel">
+            <PanelTitle icon="▤" title="Movimientos" />
+            {expenses.map((expense) => (
+              <ListRow
+                key={expense.id}
+                title={expense.title}
+                subtitle={`${expense.category} · $${Number(
+                  expense.amount,
+                ).toLocaleString('es-CO')}`}
+              />
+            ))}
+          </article>
+        </section>
+      )}
+
+      {activeTab === 'habits' && (
+        <section>
+          <SectionHeader
+            title="Hábitos"
+            buttonText="⚙ Configurar"
+            onClick={() => setShowForm(!showForm)}
+          />
+
+          {showForm && (
+            <form className="form-panel" onSubmit={createTask}>
+              <input
+                placeholder="Nombre del hábito"
+                value={taskForm.title}
+                onChange={(e) =>
+                  setTaskForm({ ...taskForm, title: e.target.value })
+                }
+              />
+              <input
+                placeholder="Meta o descripción"
+                value={taskForm.description}
+                onChange={(e) =>
+                  setTaskForm({ ...taskForm, description: e.target.value })
+                }
+              />
+              <select
+                value={taskForm.priority}
+                onChange={(e) =>
+                  setTaskForm({ ...taskForm, priority: e.target.value })
+                }
+              >
+                <option value="LOW">Baja</option>
+                <option value="MEDIUM">Media</option>
+                <option value="HIGH">Alta</option>
+              </select>
+              <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+            </form>
+          )}
+
+          <section className="finance-stats">
+            <StatCard value={tasks.length} label="HÁBITOS" color="purple" />
+            <StatCard value={`${completedTasks}/${tasks.length}`} label="HOY COMPLETADOS" color="green" />
+            <StatCard value="0" label="MEJOR RACHA (DÍAS)" color="yellow" />
+            <StatCard value={pendingTasks} label="PENDIENTES HOY" color="red" />
+          </section>
+
+          <section className="habits-grid">
+            {tasks.map((task) => (
+              <article className="habit-card" key={task.id}>
+                <div className="habit-head">
+                  <div>
+                    <strong>{task.title}</strong>
+                    <p>{task.description ?? 'Meta diaria'}</p>
+                  </div>
+                  <span>{task.status === 'COMPLETED' ? '1' : '0'}</span>
+                </div>
+
+                <div className="mini-progress" />
+
+                <div className="habit-meta">
+                  <span>♨ Racha: 0 días</span>
+                  <span>{task.status === 'COMPLETED' ? '100%' : '0%'} hoy</span>
+                </div>
+
+                <div className="habit-days">
+                  {Array.from({ length: 14 }, (_, index) => (
+                    <button key={index} className={index === 13 ? 'today' : ''} />
+                  ))}
+                </div>
+
+                <button className="register-button">+ Registrar hoy</button>
+              </article>
+            ))}
+          </section>
+        </section>
+      )}
+
+      {activeTab === 'reminders' && (
+        <section>
+          <SectionHeader
+            title="Recordatorios"
+            buttonText="+ Nuevo recordatorio"
+            onClick={() => setShowForm(!showForm)}
+          />
+
+          {showForm && (
+            <form className="form-panel" onSubmit={createReminder}>
+              <input
+                placeholder="Título"
+                value={reminderForm.title}
+                onChange={(e) =>
+                  setReminderForm({ ...reminderForm, title: e.target.value })
+                }
+              />
+              <input
+                placeholder="Descripción"
+                value={reminderForm.description}
+                onChange={(e) =>
+                  setReminderForm({
+                    ...reminderForm,
+                    description: e.target.value,
+                  })
+                }
+              />
+              <input
+                type="datetime-local"
+                value={reminderForm.remindAt}
+                onChange={(e) =>
+                  setReminderForm({ ...reminderForm, remindAt: e.target.value })
+                }
+              />
+              <select
+                value={reminderForm.priority}
+                onChange={(e) =>
+                  setReminderForm({ ...reminderForm, priority: e.target.value })
+                }
+              >
+                <option value="LOW">Baja</option>
+                <option value="MEDIUM">Media</option>
+                <option value="HIGH">Alta</option>
+              </select>
+              <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+            </form>
+          )}
+
+          <section className="finance-stats">
+            <StatCard value={reminders.length} label="TOTAL" color="purple" />
+            <StatCard
+              value={reminders.filter((item) => item.status === 'DONE').length}
+              label="COMPLETADOS"
+              color="green"
+            />
+            <StatCard
+              value={reminders.filter((item) => item.status === 'PENDING').length}
+              label="PENDIENTES"
+              color="yellow"
+            />
+            <StatCard
+              value={reminders.filter((item) => item.priority === 'HIGH').length}
+              label="ALTA PRIORIDAD"
+              color="red"
+            />
+          </section>
+
+          <article className="panel movements-panel">
+            <PanelTitle icon="🔔" title="Recordatorios activos" />
+
+            {reminders.map((reminder) => (
+              <ListRow
+                key={reminder.id}
+                title={reminder.title}
+                subtitle={`${reminder.status} · ${reminder.priority} · ${formatDate(
+                  reminder.remindAt,
+                )}`}
+              />
+            ))}
+          </article>
+        </section>
+      )}
     </main>
   );
 }
 
-function StatCard({ value, label }: { value: string | number; label: string }) {
+function SectionHeader({
+  title,
+  buttonText,
+  onClick,
+}: {
+  title: string;
+  buttonText: string;
+  onClick: () => void;
+}) {
   return (
-    <article className="stat-card">
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </article>
+    <section className="section-header">
+      <h1>{title}</h1>
+      <button onClick={onClick}>{buttonText}</button>
+    </section>
   );
 }
 
-function ListItem({ title, subtitle }: { title: string; subtitle: string }) {
+function PanelTitle({ icon, title }: { icon: string; title: string }) {
   return (
-    <article className="list-item">
-      <div>
-        <strong>{title}</strong>
-        <p>{subtitle}</p>
-      </div>
+    <div className="panel-title">
+      <span>{icon}</span>
+      <strong>{title}</strong>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="empty-state">
+      <span>▧</span>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function ListRow({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="list-row">
+      <strong>{title}</strong>
+      <p>{subtitle}</p>
+    </div>
+  );
+}
+
+function StatCard({
+  value,
+  label,
+  color,
+}: {
+  value: string | number;
+  label: string;
+  color: 'green' | 'red' | 'yellow' | 'purple';
+}) {
+  return (
+    <article className={`stat-card ${color}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
     </article>
   );
 }
