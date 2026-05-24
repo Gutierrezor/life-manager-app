@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Task {
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String?
+  status      TaskStatus @default(PENDING)
+  priority    Priority   @default(MEDIUM)
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("tasks")
+}
+enum ExpenseCategory {
+  FOOD
+  TRANSPORT
+  STUDY
+  HEALTH
+  ENTERTAINMENT
+  SERVICES
+  OTHER
+}
+
+model Expense {
+  id          Int             @id @default(autoincrement())
+  title       String
+  amount      Decimal         @db.Decimal(10, 2)
+  category    ExpenseCategory @default(OTHER)
+  description String?
+  expenseDate DateTime        @default(now())
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("expenses")
+}
+enum ReminderStatus {
+  PENDING
+  DONE
+  CANCELLED
+}
+
+model Reminder {
+  id          Int            @id @default(autoincrement())
+  title       String
+  description String?
+  remindAt    DateTime
+  status      ReminderStatus @default(PENDING)
+  priority    Priority       @default(MEDIUM)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("reminders")
+}
+model AgendaEvent {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("agenda_events")
+}
