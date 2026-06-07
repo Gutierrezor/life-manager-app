@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { api } from './api/api';
+import { api, setApiToken } from './api/api';
 import './App.css';
+import { AuthForm } from './components/AuthForm';
+import { EmptyState } from './components/EmptyState';
+import { ListRow } from './components/ListRow';
+import { PanelTitle } from './components/PanelTitle';
+import { SectionHeader } from './components/SectionHeader';
+import { StatCard } from './components/StatCard';
 
 type Tab = 'reminders' | 'agenda' | 'expenses' | 'habits';
-
-type Task = {
-  id: number;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-};
 
 type Expense = {
   id: number;
@@ -19,6 +17,14 @@ type Expense = {
   amount: string;
   category: string;
   description?: string;
+};
+
+type Income = {
+  id: number;
+  title: string;
+  amount: string;
+  source?: string;
+  incomeDate: string;
 };
 
 type Reminder = {
@@ -39,17 +45,85 @@ type AgendaEvent = {
   location?: string;
 };
 
+type Habit = {
+  id: number;
+  name: string;
+  description?: string;
+  status: string;
+  streak: number;
+  targetDays: number;
+  lastTrackedAt?: string;
+};
+
+type AuthFormState = {
+  email: string;
+  password: string;
+  fullName: string;
+};
+
+const storageKey = 'life_manager_token';
+
+function getEmailFromToken(token: string) {
+  try {
+    const [, payload] = token.split('.');
+    const decoded = JSON.parse(atob(payload));
+    return decoded?.email ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat('es-CO', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(date));
+}
+
 function App() {
+  const [token, setToken] = useState(() => localStorage.getItem(storageKey) ?? '');
+  const [userEmail, setUserEmail] = useState(() => getEmailFromToken(localStorage.getItem(storageKey) ?? ''));
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authForm, setAuthForm] = useState<AuthFormState>({
+    email: '',
+    password: '',
+    fullName: '',
+  });
+
   const [activeTab, setActiveTab] = useState<Tab>('agenda');
-
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [agenda, setAgenda] = useState<AgendaEvent[]>([]);
-
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [agenda, setAgenda] = useState<AgendaEvent[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
+
+  const [expenseForm, setExpenseForm] = useState({
+    title: '',
+    amount: '',
+    category: 'FOOD',
+    description: '',
+  });
+  const [incomeForm, setIncomeForm] = useState({
+    title: '',
+    amount: '',
+    source: '',
+  });
+  const [habitForm, setHabitForm] = useState({
+    name: '',
+    description: '',
+    status: 'PENDING',
+    targetDays: '7',
+  });
+  const [reminderForm, setReminderForm] = useState({
+    title: '',
+    description: '',
+    remindAt: '',
+    priority: 'MEDIUM',
+  });
   const [agendaForm, setAgendaForm] = useState({
     title: '',
     description: '',
@@ -58,169 +132,283 @@ function App() {
     location: '',
   });
 
-  const [expenseForm, setExpenseForm] = useState({
-    title: '',
-    amount: '',
-    category: 'FOOD',
-    description: '',
-  });
-
-  const [reminderForm, setReminderForm] = useState({
-    title: '',
-    description: '',
-    remindAt: '',
-    priority: 'MEDIUM',
-  });
-
-  const [taskForm, setTaskForm] = useState({
-    title: '',
-    description: '',
-    priority: 'MEDIUM',
-  });
-
-  async function loadData() {
-    const [tasksRes, expensesRes, remindersRes, agendaRes] = await Promise.all([
-      api.get('/tasks'),
-      api.get('/expenses'),
-      api.get('/reminders'),
-      api.get('/agenda'),
-    ]);
-
-    setTasks(tasksRes.data);
-    setExpenses(expensesRes.data);
-    setReminders(remindersRes.data);
-    setAgenda(agendaRes.data);
-  }
+  const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
+  const [editingIncomeId, setEditingIncomeId] = useState<number | null>(null);
+  const [editingHabitId, setEditingHabitId] = useState<number | null>(null);
+  const [financeType, setFinanceType] = useState<'expense' | 'income'>('expense');
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (token) {
+      setApiToken(token);
+      setUserEmail(getEmailFromToken(token));
+      loadData();
+    } else {
+      setApiToken(undefined);
+    }
+  }, [token]);
 
-  async function createAgenda(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleApiError(error: unknown) {
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+      const response = (error as any).response;
+      if (response?.status === 401) {
+        handleLogout();
+        setError('Sesión expirada. Inicia sesión nuevamente.');
+        return;
+      }
+    }
 
-    if (!agendaForm.title || !agendaForm.startTime || !agendaForm.endTime) return;
+    setError('Ocurrió un error al procesar la solicitud.');
+  }
 
+  async function loadData() {
     setLoading(true);
+    setError('');
 
     try {
-      await api.post('/agenda', {
-        title: agendaForm.title,
-        description: agendaForm.description || undefined,
-        startTime: new Date(agendaForm.startTime).toISOString(),
-        endTime: new Date(agendaForm.endTime).toISOString(),
-        location: agendaForm.location || undefined,
-      });
+      const [expensesRes, incomesRes, remindersRes, agendaRes, habitsRes] = await Promise.all([
+        api.get('/expenses'),
+        api.get('/incomes'),
+        api.get('/reminders'),
+        api.get('/agenda'),
+        api.get('/habits'),
+      ]);
 
-      setAgendaForm({
-        title: '',
-        description: '',
-        startTime: '',
-        endTime: '',
-        location: '',
-      });
-
-      setShowForm(false);
-      await loadData();
+      setExpenses(expensesRes.data);
+      setIncomes(incomesRes.data);
+      setReminders(remindersRes.data);
+      setAgenda(agendaRes.data);
+      setHabits(habitsRes.data);
+    } catch (error) {
+      await handleApiError(error);
     } finally {
       setLoading(false);
     }
   }
 
-  async function createExpense(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!expenseForm.title || !expenseForm.amount) return;
-
     setLoading(true);
+    setError('');
 
     try {
-      await api.post('/expenses', {
+      const response = await api.post('/auth/login', {
+        email: authForm.email,
+        password: authForm.password,
+      });
+      const accessToken = response.data.accessToken;
+      setToken(accessToken);
+      localStorage.setItem(storageKey, accessToken);
+      setUserEmail(getEmailFromToken(accessToken));
+      setAuthForm({ email: '', password: '', fullName: '' });
+    } catch (error) {
+      setError('Correo o contraseña incorrectos.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      await api.post('/auth/register', {
+        email: authForm.email,
+        password: authForm.password,
+        fullName: authForm.fullName,
+      });
+      setAuthMode('login');
+      setError('Usuario creado. Ahora inicia sesión.');
+      setAuthForm({ email: '', password: '', fullName: '' });
+    } catch (error) {
+      setError('No se pudo registrar el usuario.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleLogout() {
+    setToken('');
+    setUserEmail('');
+    localStorage.removeItem(storageKey);
+    setExpenses([]);
+    setIncomes([]);
+    setReminders([]);
+    setAgenda([]);
+    setHabits([]);
+  }
+
+  async function handleExpenseSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const payload = {
         title: expenseForm.title,
         amount: Number(expenseForm.amount),
         category: expenseForm.category,
         description: expenseForm.description || undefined,
-      });
+      };
 
-      setExpenseForm({
-        title: '',
-        amount: '',
-        category: 'FOOD',
-        description: '',
-      });
+      if (editingExpenseId) {
+        await api.patch(`/expenses/${editingExpenseId}`, payload);
+      } else {
+        await api.post('/expenses', payload);
+      }
 
-      setShowForm(false);
       await loadData();
+      setShowForm(false);
+      setEditingExpenseId(null);
+      setExpenseForm({ title: '', amount: '', category: 'FOOD', description: '' });
+    } catch (error) {
+      await handleApiError(error);
     } finally {
       setLoading(false);
     }
   }
 
-  async function createReminder(event: FormEvent<HTMLFormElement>) {
+  async function handleIncomeSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!reminderForm.title || !reminderForm.remindAt) return;
-
     setLoading(true);
+    setError('');
 
     try {
-      await api.post('/reminders', {
-        title: reminderForm.title,
-        description: reminderForm.description || undefined,
-        remindAt: new Date(reminderForm.remindAt).toISOString(),
-        priority: reminderForm.priority,
-        status: 'PENDING',
-      });
+      const payload = {
+        title: incomeForm.title,
+        amount: Number(incomeForm.amount),
+        source: incomeForm.source || undefined,
+      };
 
-      setReminderForm({
-        title: '',
-        description: '',
-        remindAt: '',
-        priority: 'MEDIUM',
-      });
+      if (editingIncomeId) {
+        await api.patch(`/incomes/${editingIncomeId}`, payload);
+      } else {
+        await api.post('/incomes', payload);
+      }
 
-      setShowForm(false);
       await loadData();
+      setShowForm(false);
+      setEditingIncomeId(null);
+      setIncomeForm({ title: '', amount: '', source: '' });
+    } catch (error) {
+      await handleApiError(error);
     } finally {
       setLoading(false);
     }
   }
 
-  async function createTask(event: FormEvent<HTMLFormElement>) {
+  async function handleHabitSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!taskForm.title) return;
-
     setLoading(true);
+    setError('');
 
     try {
-      await api.post('/tasks', {
-        title: taskForm.title,
-        description: taskForm.description || undefined,
-        priority: taskForm.priority,
-        status: 'PENDING',
-      });
+      const payload = {
+        name: habitForm.name,
+        description: habitForm.description || undefined,
+        status: habitForm.status,
+        targetDays: Number(habitForm.targetDays),
+      };
 
-      setTaskForm({
-        title: '',
-        description: '',
-        priority: 'MEDIUM',
-      });
+      if (editingHabitId) {
+        await api.patch(`/habits/${editingHabitId}`, payload);
+      } else {
+        await api.post('/habits', payload);
+      }
 
-      setShowForm(false);
       await loadData();
+      setShowForm(false);
+      setEditingHabitId(null);
+      setHabitForm({ name: '', description: '', status: 'PENDING', targetDays: '7' });
+    } catch (error) {
+      await handleApiError(error);
     } finally {
       setLoading(false);
     }
   }
 
-  const totalExpenses = expenses.reduce(
-    (total, expense) => total + Number(expense.amount),
-    0,
-  );
+  async function handleDelete(endpoint: string, id: number) {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este registro?')) {
+      return;
+    }
 
-  const completedTasks = tasks.filter((task) => task.status === 'COMPLETED').length;
-  const pendingTasks = tasks.filter((task) => task.status !== 'COMPLETED').length;
+    setLoading(true);
+    setError('');
+
+    try {
+      await api.delete(`${endpoint}/${id}`);
+      await loadData();
+    } catch (error) {
+      await handleApiError(error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleEditExpense(expense: Expense) {
+    setFinanceType('expense');
+    setEditingExpenseId(expense.id);
+    setExpenseForm({
+      title: expense.title,
+      amount: expense.amount,
+      category: expense.category,
+      description: expense.description || '',
+    });
+    setShowForm(true);
+    setActiveTab('expenses');
+  }
+
+  function handleEditIncome(income: Income) {
+    setFinanceType('income');
+    setEditingIncomeId(income.id);
+    setIncomeForm({
+      title: income.title,
+      amount: income.amount,
+      source: income.source || '',
+    });
+    setShowForm(true);
+    setActiveTab('expenses');
+  }
+
+  function handleEditHabit(habit: Habit) {
+    setEditingHabitId(habit.id);
+    setHabitForm({
+      name: habit.name,
+      description: habit.description || '',
+      status: habit.status,
+      targetDays: String(habit.targetDays),
+    });
+    setShowForm(true);
+    setActiveTab('habits');
+  }
+
+  const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount), 0);
+  const totalIncome = incomes.reduce((total, item) => total + Number(item.amount), 0);
+  const balance = totalIncome - totalExpenses;
+  const completedHabits = habits.filter((habit) => habit.status === 'DONE').length;
+  const pendingHabits = habits.filter((habit) => habit.status !== 'DONE').length;
+
+  if (!token) {
+    return (
+      <main className="app auth-screen">
+        <AuthForm
+          mode={authMode}
+          email={authForm.email}
+          password={authForm.password}
+          fullName={authForm.fullName}
+          error={error}
+          loading={loading}
+          onChange={(field, value) => setAuthForm({ ...authForm, [field]: value })}
+          onSubmit={authMode === 'login' ? handleLogin : handleRegister}
+          onToggleMode={() => {
+            setAuthMode(authMode === 'login' ? 'register' : 'login');
+            setError('');
+          }}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="app">
@@ -271,7 +459,16 @@ function App() {
             🔥 Hábitos
           </button>
         </nav>
+
+        <div className="user-actions">
+          <span>{userEmail}</span>
+          <button className="outline-button" onClick={handleLogout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
+
+      {error && <div className="toast-error">{error}</div>}
 
       {activeTab === 'agenda' && (
         <section>
@@ -282,41 +479,51 @@ function App() {
           />
 
           {showForm && (
-            <form className="form-panel" onSubmit={createAgenda}>
+            <form className="form-panel" onSubmit={async (event) => {
+              event.preventDefault();
+              setLoading(true);
+              setError('');
+              try {
+                await api.post('/agenda', {
+                  title: agendaForm.title,
+                  description: agendaForm.description || undefined,
+                  startTime: new Date(agendaForm.startTime).toISOString(),
+                  endTime: new Date(agendaForm.endTime).toISOString(),
+                  location: agendaForm.location || undefined,
+                });
+                setAgendaForm({ title: '', description: '', startTime: '', endTime: '', location: '' });
+                setShowForm(false);
+                await loadData();
+              } catch (error) {
+                await handleApiError(error);
+              } finally {
+                setLoading(false);
+              }
+            }}>
               <input
                 placeholder="Título del evento"
                 value={agendaForm.title}
-                onChange={(e) =>
-                  setAgendaForm({ ...agendaForm, title: e.target.value })
-                }
+                onChange={(e) => setAgendaForm({ ...agendaForm, title: e.target.value })}
               />
               <input
                 placeholder="Descripción"
                 value={agendaForm.description}
-                onChange={(e) =>
-                  setAgendaForm({ ...agendaForm, description: e.target.value })
-                }
+                onChange={(e) => setAgendaForm({ ...agendaForm, description: e.target.value })}
               />
               <input
                 type="datetime-local"
                 value={agendaForm.startTime}
-                onChange={(e) =>
-                  setAgendaForm({ ...agendaForm, startTime: e.target.value })
-                }
+                onChange={(e) => setAgendaForm({ ...agendaForm, startTime: e.target.value })}
               />
               <input
                 type="datetime-local"
                 value={agendaForm.endTime}
-                onChange={(e) =>
-                  setAgendaForm({ ...agendaForm, endTime: e.target.value })
-                }
+                onChange={(e) => setAgendaForm({ ...agendaForm, endTime: e.target.value })}
               />
               <input
                 placeholder="Ubicación"
                 value={agendaForm.location}
-                onChange={(e) =>
-                  setAgendaForm({ ...agendaForm, location: e.target.value })
-                }
+                onChange={(e) => setAgendaForm({ ...agendaForm, location: e.target.value })}
               />
               <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
             </form>
@@ -325,22 +532,19 @@ function App() {
           <div className="calendar-layout">
             <article className="panel calendar-panel">
               <div className="calendar-header">
-                <button>‹</button>
+                <button disabled>‹</button>
                 <h2>Mayo 2026</h2>
-                <button>›</button>
+                <button disabled>›</button>
               </div>
-
               <div className="calendar-grid">
                 {['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SÁ'].map((day) => (
                   <span className="day-name" key={day}>
                     {day}
                   </span>
                 ))}
-
                 {Array.from({ length: 35 }, (_, index) => {
                   const day = index - 4;
                   const isCurrent = day === 24;
-
                   return (
                     <span
                       key={index}
@@ -355,7 +559,6 @@ function App() {
 
             <article className="panel events-panel">
               <PanelTitle icon="📅" title="Próximos eventos" />
-
               {agenda.length === 0 ? (
                 <EmptyState text="Sin eventos próximos" />
               ) : (
@@ -363,9 +566,7 @@ function App() {
                   <ListRow
                     key={event.id}
                     title={event.title}
-                    subtitle={`${formatDate(event.startTime)} · ${
-                      event.location ?? 'Sin ubicación'
-                    }`}
+                    subtitle={`${formatDate(event.startTime)} · ${event.location ?? 'Sin ubicación'}`}
                   />
                 ))
               )}
@@ -378,190 +579,239 @@ function App() {
         <section>
           <SectionHeader
             title="Finanzas"
-            buttonText="+ Transacción"
+            buttonText="+ Nueva transacción"
             onClick={() => setShowForm(!showForm)}
           />
 
           {showForm && (
-            <form className="form-panel" onSubmit={createExpense}>
-              <input
-                placeholder="Nombre del gasto"
-                value={expenseForm.title}
-                onChange={(e) =>
-                  setExpenseForm({ ...expenseForm, title: e.target.value })
+            <div className="record-type-switch">
+              <button
+                type="button"
+                className={financeType === 'expense' ? 'active' : ''}
+                onClick={() => {
+                  setFinanceType('expense');
+                  setEditingIncomeId(null);
+                }}
+              >
+                Gasto
+              </button>
+              <button
+                type="button"
+                className={financeType === 'income' ? 'active' : ''}
+                onClick={() => {
+                  setFinanceType('income');
+                  setEditingExpenseId(null);
+                }}
+              >
+                Ingreso
+              </button>
+            </div>
+            <form
+              className="form-panel"
+              onSubmit={(event) => {
+                if (financeType === 'income') {
+                  handleIncomeSubmit(event);
+                } else {
+                  handleExpenseSubmit(event);
                 }
+              }}
+            >
+              <input
+                placeholder="Nombre"
+                value={financeType === 'income' ? incomeForm.title : expenseForm.title}
+                onChange={(e) => {
+                  if (financeType === 'income') {
+                    setIncomeForm({ ...incomeForm, title: e.target.value });
+                  } else {
+                    setExpenseForm({ ...expenseForm, title: e.target.value });
+                  }
+                }}
               />
               <input
                 type="number"
                 placeholder="Valor"
-                value={expenseForm.amount}
-                onChange={(e) =>
-                  setExpenseForm({ ...expenseForm, amount: e.target.value })
-                }
+                value={financeType === 'income' ? incomeForm.amount : expenseForm.amount}
+                onChange={(e) => {
+                  if (financeType === 'income') {
+                    setIncomeForm({ ...incomeForm, amount: e.target.value });
+                  } else {
+                    setExpenseForm({ ...expenseForm, amount: e.target.value });
+                  }
+                }}
               />
-              <select
-                value={expenseForm.category}
-                onChange={(e) =>
-                  setExpenseForm({ ...expenseForm, category: e.target.value })
-                }
-              >
-                <option value="FOOD">Comida</option>
-                <option value="TRANSPORT">Transporte</option>
-                <option value="STUDY">Estudio</option>
-                <option value="HEALTH">Salud</option>
-                <option value="ENTERTAINMENT">Entretenimiento</option>
-                <option value="SERVICES">Servicios</option>
-                <option value="OTHER">Otro</option>
-              </select>
-              <input
-                placeholder="Descripción"
-                value={expenseForm.description}
-                onChange={(e) =>
-                  setExpenseForm({ ...expenseForm, description: e.target.value })
-                }
-              />
-              <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+              {financeType === 'income' ? (
+                <input
+                  placeholder="Fuente"
+                  value={incomeForm.source}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, source: e.target.value })}
+                />
+              ) : (
+                <select
+                  value={expenseForm.category}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
+                >
+                  <option value="FOOD">Comida</option>
+                  <option value="TRANSPORT">Transporte</option>
+                  <option value="STUDY">Estudio</option>
+                  <option value="HEALTH">Salud</option>
+                  <option value="ENTERTAINMENT">Entretenimiento</option>
+                  <option value="SERVICES">Servicios</option>
+                  <option value="OTHER">Otro</option>
+                </select>
+              )}
+              {financeType === 'expense' && (
+                <input
+                  placeholder="Descripción"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                />
+              )}
+              <button disabled={loading}>
+                {loading ? 'Guardando...' : financeType === 'income' ? 'Guardar ingreso' : 'Guardar gasto'}
+              </button>
             </form>
           )}
 
           <section className="finance-stats">
-            <StatCard value="$0" label="INGRESOS" color="green" />
-            <StatCard
-              value={`$${totalExpenses.toLocaleString('es-CO')}`}
-              label="GASTOS"
-              color="red"
-            />
-            <StatCard
-              value={`-$${totalExpenses.toLocaleString('es-CO')}`}
-              label="BALANCE"
-              color="green"
-            />
-            <StatCard value={expenses.length} label="MOVIMIENTOS" color="yellow" />
+            <StatCard value={`$${totalIncome.toLocaleString('es-CO')}`} label="INGRESOS" color="green" />
+            <StatCard value={`$${totalExpenses.toLocaleString('es-CO')}`} label="GASTOS" color="red" />
+            <StatCard value={`$${balance.toLocaleString('es-CO')}`} label="BALANCE" color={balance >= 0 ? 'green' : 'red'} />
+            <StatCard value={expenses.length + incomes.length} label="MOVIMIENTOS" color="yellow" />
           </section>
 
           <div className="finance-layout">
             <article className="panel">
-              <PanelTitle icon="◔" title="Por categoría" />
-
-              {expenses.length === 0 ? (
-                <EmptyState text="Sin gastos aún" />
+              <PanelTitle icon="📥" title="Ingresos recientes" />
+              {incomes.length === 0 ? (
+                <EmptyState text="Sin ingresos registrados" />
               ) : (
-                expenses.map((expense) => (
+                incomes.map((income) => (
                   <ListRow
-                    key={expense.id}
-                    title={expense.title}
-                    subtitle={`$${Number(expense.amount).toLocaleString(
-                      'es-CO',
-                    )} · ${expense.category}`}
+                    key={income.id}
+                    title={income.title}
+                    subtitle={`$${Number(income.amount).toLocaleString('es-CO')} · ${income.source ?? 'Sin fuente'}`}
+                    actions={
+                      <div className="row-actions">
+                        <button type="button" onClick={() => handleEditIncome(income)}>
+                          Editar
+                        </button>
+                        <button className="delete-button" type="button" onClick={() => handleDelete('/incomes', income.id)}>
+                          Eliminar
+                        </button>
+                      </div>
+                    }
                   />
                 ))
               )}
             </article>
 
             <article className="panel">
-              <PanelTitle icon="◎" title="Meta de ahorro" />
-              <div className="saving-box">
-                <p>Meta de ahorro</p>
-                <div className="saving-line">
-                  <span>Ahorrado: $0</span>
-                  <span>Meta: $0</span>
-                </div>
-                <div className="progress">
-                  <span />
-                </div>
-                <small>0% · Faltan $0</small>
-                <button className="outline-button">✎ Editar meta</button>
-              </div>
+              <PanelTitle icon="💸" title="Gastos recientes" />
+              {expenses.length === 0 ? (
+                <EmptyState text="Sin gastos registrados" />
+              ) : (
+                expenses.map((expense) => (
+                  <ListRow
+                    key={expense.id}
+                    title={expense.title}
+                    subtitle={`$${Number(expense.amount).toLocaleString('es-CO')} · ${expense.category}`}
+                    actions={
+                      <div className="row-actions">
+                        <button type="button" onClick={() => handleEditExpense(expense)}>
+                          Editar
+                        </button>
+                        <button className="delete-button" type="button" onClick={() => handleDelete('/expenses', expense.id)}>
+                          Eliminar
+                        </button>
+                      </div>
+                    }
+                  />
+                ))
+              )}
             </article>
           </div>
-
-          <article className="panel movements-panel">
-            <PanelTitle icon="▤" title="Movimientos" />
-            {expenses.map((expense) => (
-              <ListRow
-                key={expense.id}
-                title={expense.title}
-                subtitle={`${expense.category} · $${Number(
-                  expense.amount,
-                ).toLocaleString('es-CO')}`}
-              />
-            ))}
-          </article>
         </section>
       )}
 
       {activeTab === 'habits' && (
         <section>
-          <SectionHeader
-            title="Hábitos"
-            buttonText="⚙ Configurar"
-            onClick={() => setShowForm(!showForm)}
-          />
+          <SectionHeader title="Hábitos" buttonText="+ Nuevo hábito" onClick={() => setShowForm(!showForm)} />
 
           {showForm && (
-            <form className="form-panel" onSubmit={createTask}>
+            <form className="form-panel" onSubmit={handleHabitSubmit}>
               <input
                 placeholder="Nombre del hábito"
-                value={taskForm.title}
-                onChange={(e) =>
-                  setTaskForm({ ...taskForm, title: e.target.value })
-                }
+                value={habitForm.name}
+                onChange={(e) => setHabitForm({ ...habitForm, name: e.target.value })}
               />
               <input
-                placeholder="Meta o descripción"
-                value={taskForm.description}
-                onChange={(e) =>
-                  setTaskForm({ ...taskForm, description: e.target.value })
-                }
+                placeholder="Descripción"
+                value={habitForm.description}
+                onChange={(e) => setHabitForm({ ...habitForm, description: e.target.value })}
               />
               <select
-                value={taskForm.priority}
-                onChange={(e) =>
-                  setTaskForm({ ...taskForm, priority: e.target.value })
-                }
+                value={habitForm.status}
+                onChange={(e) => setHabitForm({ ...habitForm, status: e.target.value })}
               >
-                <option value="LOW">Baja</option>
-                <option value="MEDIUM">Media</option>
-                <option value="HIGH">Alta</option>
+                <option value="PENDING">Pendiente</option>
+                <option value="DONE">Completado</option>
+                <option value="SKIPPED">Omitido</option>
               </select>
-              <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+              <input
+                type="number"
+                min="1"
+                placeholder="Objetivo de días"
+                value={habitForm.targetDays}
+                onChange={(e) => setHabitForm({ ...habitForm, targetDays: e.target.value })}
+              />
+              <button disabled={loading}>{loading ? 'Guardando...' : 'Guardar hábito'}</button>
             </form>
           )}
 
           <section className="finance-stats">
-            <StatCard value={tasks.length} label="HÁBITOS" color="purple" />
-            <StatCard value={`${completedTasks}/${tasks.length}`} label="HOY COMPLETADOS" color="green" />
-            <StatCard value="0" label="MEJOR RACHA (DÍAS)" color="yellow" />
-            <StatCard value={pendingTasks} label="PENDIENTES HOY" color="red" />
+            <StatCard value={habits.length} label="HÁBITOS" color="purple" />
+            <StatCard value={`${completedHabits}/${habits.length}`} label="COMPLETADOS" color="green" />
+            <StatCard value={`${pendingHabits}`} label="PENDIENTES" color="yellow" />
+            <StatCard value="Racha" label="DETALLES" color="red" />
           </section>
 
           <section className="habits-grid">
-            {tasks.map((task) => (
-              <article className="habit-card" key={task.id}>
-                <div className="habit-head">
-                  <div>
-                    <strong>{task.title}</strong>
-                    <p>{task.description ?? 'Meta diaria'}</p>
+            {habits.length === 0 ? (
+              <EmptyState text="Sin hábitos configurados" />
+            ) : (
+              habits.map((habit) => (
+                <article className="habit-card" key={habit.id}>
+                  <div className="habit-head">
+                    <div>
+                      <strong>{habit.name}</strong>
+                      <p>{habit.description ?? 'Meta diaria'}</p>
+                    </div>
+                    <span>{habit.status === 'DONE' ? '✔' : '⏳'}</span>
                   </div>
-                  <span>{task.status === 'COMPLETED' ? '1' : '0'}</span>
-                </div>
 
-                <div className="mini-progress" />
+                  <div className="mini-progress" />
+                  <div className="habit-meta">
+                    <span>Racha: {habit.streak} días</span>
+                    <span>{Math.round((habit.streak / habit.targetDays) * 100)}% hoy</span>
+                  </div>
 
-                <div className="habit-meta">
-                  <span>♨ Racha: 0 días</span>
-                  <span>{task.status === 'COMPLETED' ? '100%' : '0%'} hoy</span>
-                </div>
+                  <div className="habit-days">
+                    {Array.from({ length: 7 }, (_, index) => (
+                      <button key={index} className={index === 6 ? 'today' : ''} />
+                    ))}
+                  </div>
 
-                <div className="habit-days">
-                  {Array.from({ length: 14 }, (_, index) => (
-                    <button key={index} className={index === 13 ? 'today' : ''} />
-                  ))}
-                </div>
-
-                <button className="register-button">+ Registrar hoy</button>
-              </article>
-            ))}
+                  <div className="row-actions">
+                    <button type="button" onClick={() => handleEditHabit(habit)}>
+                      Editar
+                    </button>
+                    <button className="delete-button" type="button" onClick={() => handleDelete('/habits', habit.id)}>
+                      Eliminar
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
           </section>
         </section>
       )}
@@ -575,36 +825,46 @@ function App() {
           />
 
           {showForm && (
-            <form className="form-panel" onSubmit={createReminder}>
+            <form className="form-panel" onSubmit={async (event) => {
+              event.preventDefault();
+              setLoading(true);
+              setError('');
+
+              try {
+                await api.post('/reminders', {
+                  title: reminderForm.title,
+                  description: reminderForm.description || undefined,
+                  remindAt: new Date(reminderForm.remindAt).toISOString(),
+                  priority: reminderForm.priority,
+                  status: 'PENDING',
+                });
+                setReminderForm({ title: '', description: '', remindAt: '', priority: 'MEDIUM' });
+                setShowForm(false);
+                await loadData();
+              } catch (error) {
+                await handleApiError(error);
+              } finally {
+                setLoading(false);
+              }
+            }}>
               <input
                 placeholder="Título"
                 value={reminderForm.title}
-                onChange={(e) =>
-                  setReminderForm({ ...reminderForm, title: e.target.value })
-                }
+                onChange={(e) => setReminderForm({ ...reminderForm, title: e.target.value })}
               />
               <input
                 placeholder="Descripción"
                 value={reminderForm.description}
-                onChange={(e) =>
-                  setReminderForm({
-                    ...reminderForm,
-                    description: e.target.value,
-                  })
-                }
+                onChange={(e) => setReminderForm({ ...reminderForm, description: e.target.value })}
               />
               <input
                 type="datetime-local"
                 value={reminderForm.remindAt}
-                onChange={(e) =>
-                  setReminderForm({ ...reminderForm, remindAt: e.target.value })
-                }
+                onChange={(e) => setReminderForm({ ...reminderForm, remindAt: e.target.value })}
               />
               <select
                 value={reminderForm.priority}
-                onChange={(e) =>
-                  setReminderForm({ ...reminderForm, priority: e.target.value })
-                }
+                onChange={(e) => setReminderForm({ ...reminderForm, priority: e.target.value })}
               >
                 <option value="LOW">Baja</option>
                 <option value="MEDIUM">Media</option>
@@ -616,108 +876,34 @@ function App() {
 
           <section className="finance-stats">
             <StatCard value={reminders.length} label="TOTAL" color="purple" />
-            <StatCard
-              value={reminders.filter((item) => item.status === 'DONE').length}
-              label="COMPLETADOS"
-              color="green"
-            />
-            <StatCard
-              value={reminders.filter((item) => item.status === 'PENDING').length}
-              label="PENDIENTES"
-              color="yellow"
-            />
-            <StatCard
-              value={reminders.filter((item) => item.priority === 'HIGH').length}
-              label="ALTA PRIORIDAD"
-              color="red"
-            />
+            <StatCard value={reminders.filter((item) => item.status === 'DONE').length} label="COMPLETADOS" color="green" />
+            <StatCard value={reminders.filter((item) => item.status === 'PENDING').length} label="PENDIENTES" color="yellow" />
+            <StatCard value={reminders.filter((item) => item.priority === 'HIGH').length} label="ALTA PRIORIDAD" color="red" />
           </section>
 
           <article className="panel movements-panel">
             <PanelTitle icon="🔔" title="Recordatorios activos" />
-
-            {reminders.map((reminder) => (
-              <ListRow
-                key={reminder.id}
-                title={reminder.title}
-                subtitle={`${reminder.status} · ${reminder.priority} · ${formatDate(
-                  reminder.remindAt,
-                )}`}
-              />
-            ))}
+            {reminders.length === 0 ? (
+              <EmptyState text="Sin recordatorios activos" />
+            ) : (
+              reminders.map((reminder) => (
+                <ListRow
+                  key={reminder.id}
+                  title={reminder.title}
+                  subtitle={`${reminder.status} · ${reminder.priority} · ${formatDate(reminder.remindAt)}`}
+                  actions={
+                    <button className="delete-button" type="button" onClick={() => handleDelete('/reminders', reminder.id)}>
+                      Eliminar
+                    </button>
+                  }
+                />
+              ))
+            )}
           </article>
         </section>
       )}
     </main>
   );
-}
-
-function SectionHeader({
-  title,
-  buttonText,
-  onClick,
-}: {
-  title: string;
-  buttonText: string;
-  onClick: () => void;
-}) {
-  return (
-    <section className="section-header">
-      <h1>{title}</h1>
-      <button onClick={onClick}>{buttonText}</button>
-    </section>
-  );
-}
-
-function PanelTitle({ icon, title }: { icon: string; title: string }) {
-  return (
-    <div className="panel-title">
-      <span>{icon}</span>
-      <strong>{title}</strong>
-    </div>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="empty-state">
-      <span>▧</span>
-      <p>{text}</p>
-    </div>
-  );
-}
-
-function ListRow({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="list-row">
-      <strong>{title}</strong>
-      <p>{subtitle}</p>
-    </div>
-  );
-}
-
-function StatCard({
-  value,
-  label,
-  color,
-}: {
-  value: string | number;
-  label: string;
-  color: 'green' | 'red' | 'yellow' | 'purple';
-}) {
-  return (
-    <article className={`stat-card ${color}`}>
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </article>
-  );
-}
-
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat('es-CO', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(date));
 }
 
 export default App;

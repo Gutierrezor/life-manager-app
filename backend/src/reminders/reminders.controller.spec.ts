@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RemindersController } from './reminders.controller';
 import { RemindersService } from './reminders.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 describe('RemindersController', () => {
   let controller: RemindersController;
@@ -8,7 +9,10 @@ describe('RemindersController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RemindersController],
-      providers: [RemindersService],
+      providers: [
+        RemindersService,
+        { provide: PrismaService, useValue: {} },
+      ],
     }).compile();
 
     controller = module.get<RemindersController>(RemindersController);

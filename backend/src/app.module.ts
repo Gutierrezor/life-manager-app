@@ -6,9 +6,21 @@ import { TasksModule } from './tasks/tasks.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { AgendaModule } from './agenda/agenda.module';
+import { AuthModule } from './auth/auth.module';
+import { HabitsModule } from './habits/habits.module';
+import { IncomesModule } from './incomes/incomes.module';
 
 @Module({
-  imports: [PrismaModule, TasksModule, ExpensesModule, RemindersModule, AgendaModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    TasksModule,
+    ExpensesModule,
+    IncomesModule,
+    RemindersModule,
+    AgendaModule,
+    HabitsModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

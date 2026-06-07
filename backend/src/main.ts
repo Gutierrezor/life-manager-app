@@ -7,7 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: 'http://localhost:5173',
+    origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : 'http://localhost:5173',
     methods: 'GET,POST,PATCH,DELETE',
     allowedHeaders: 'Content-Type, Authorization',
   });
@@ -25,10 +25,15 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Life Manager API')
     .setDescription(
-      'API para gestión de tareas, recordatorios, agenda y gastos personales.',
+      'API para gestión de tareas, recordatorios, agenda, hábitos y finanzas personales.',
     )
     .setVersion('1.0')
+    .addBearerAuth()
+    .addTag('auth')
     .addTag('tasks')
+    .addTag('expenses')
+    .addTag('incomes')
+    .addTag('habits')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

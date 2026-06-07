@@ -19,6 +19,23 @@ enum Priority {
   HIGH
 }
 
+enum HabitStatus {
+  PENDING
+  DONE
+  SKIPPED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  fullName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
 model Task {
   id          Int        @id @default(autoincrement())
   title       String
@@ -31,6 +48,7 @@ model Task {
 
   @@map("tasks")
 }
+
 enum ExpenseCategory {
   FOOD
   TRANSPORT
@@ -53,6 +71,33 @@ model Expense {
 
   @@map("expenses")
 }
+
+model Income {
+  id         Int      @id @default(autoincrement())
+  title      String
+  amount     Decimal  @db.Decimal(10, 2)
+  source     String?
+  incomeDate DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("incomes")
+}
+
+model Habit {
+  id            Int         @id @default(autoincrement())
+  name          String
+  description   String?
+  status        HabitStatus @default(PENDING)
+  streak        Int         @default(0)
+  targetDays    Int         @default(7)
+  lastTrackedAt DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("habits")
+}
+
 enum ReminderStatus {
   PENDING
   DONE
@@ -71,6 +116,7 @@ model Reminder {
 
   @@map("reminders")
 }
+
 model AgendaEvent {
   id          Int      @id @default(autoincrement())
   title       String
