@@ -7,8 +7,12 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
+  const allowOrigin = process.env.NODE_ENV === 'production'
+    ? (process.env.FRONTEND_URL ?? 'http://localhost:5173')
+    : true;
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+    origin: allowOrigin,
     credentials: true,
   });
 
