@@ -17,12 +17,14 @@ services:
       context: ./backend
       args:
         DATABASE_URL: postgresql://postgres:postgres@postgres:5432/life_manager_db?schema=public
+        JWT_SECRET: "${JWT_SECRET:-change-me}"
     container_name: life_manager_backend
     restart: always
     ports:
       - "3000:3000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/life_manager_db?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-me}
       PORT: 3000
     depends_on:
       - postgres
@@ -30,6 +32,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_API_URL: "${VITE_API_URL:-http://localhost:3000/api/v1}"
     container_name: life_manager_frontend
     restart: always
     ports:

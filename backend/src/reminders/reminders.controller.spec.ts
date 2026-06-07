@@ -5,10 +5,23 @@ import { RemindersService } from './reminders.service';
 describe('RemindersController', () => {
   let controller: RemindersController;
 
+  const mockRemindersService = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RemindersController],
-      providers: [RemindersService],
+      providers: [
+        {
+          provide: RemindersService,
+          useValue: mockRemindersService,
+        },
+      ],
     }).compile();
 
     controller = module.get<RemindersController>(RemindersController);

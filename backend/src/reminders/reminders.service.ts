@@ -1,4 +1,3 @@
-
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReminderDto } from './dto/create-reminder.dto';
@@ -8,19 +7,19 @@ import { UpdateReminderDto } from './dto/update-reminder.dto';
 export class RemindersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createReminderDto: CreateReminderDto) {
+  create(createReminderDto: CreateReminderDto) {
     return this.prisma.reminder.create({
       data: {
         title: createReminderDto.title,
         description: createReminderDto.description,
         remindAt: new Date(createReminderDto.remindAt),
         status: createReminderDto.status,
-        priority: createReminderDto.priority,
+        userId: createReminderDto.userId,
       },
     });
   }
 
-  async findAll() {
+  findAll() {
     return this.prisma.reminder.findMany({
       orderBy: {
         remindAt: 'asc',
@@ -52,7 +51,7 @@ export class RemindersService {
           ? new Date(updateReminderDto.remindAt)
           : undefined,
         status: updateReminderDto.status,
-        priority: updateReminderDto.priority,
+        userId: updateReminderDto.userId,
       },
     });
   }

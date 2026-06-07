@@ -9,7 +9,9 @@ RUN npm install
 COPY . .
 
 ARG DATABASE_URL
+ARG JWT_SECRET
 ENV DATABASE_URL=$DATABASE_URL
+ENV JWT_SECRET=$JWT_SECRET
 
 RUN npx prisma generate
 RUN npm run build

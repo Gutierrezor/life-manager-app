@@ -6,57 +6,87 @@ datasource db {
   provider = "postgresql"
 }
 
-enum TaskStatus {
+enum ReminderStatus {
   PENDING
-  IN_PROGRESS
   COMPLETED
   CANCELLED
 }
 
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
+enum HabitFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
 }
 
-model Task {
-  id          Int        @id @default(autoincrement())
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notes                 Note[]
+  noteCategories        NoteCategory[]
+  calendarEvents        CalendarEvent[]
+  reminders             Reminder[]
+  habits                Habit[]
+  habitLogs             HabitLog[]
+  financeCategories     FinanceCategory[]
+  financeTransactions   FinanceTransaction[]
+
+  @@map("users")
+}
+
+model NoteCategory {
+  id        Int      @id @default(autoincrement())
+  name      String
+  color     String?
+  userId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes Note[]
+
+  @@map("note_categories")
+}
+
+model Note {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  isFavorite  Boolean  @default(false)
+  userId      Int
+  categoryId  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category NoteCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@map("notes")
+}
+
+model CalendarEvent {
+  id          Int      @id @default(autoincrement())
   title       String
   description String?
-  status      TaskStatus @default(PENDING)
-  priority    Priority   @default(MEDIUM)
-  dueDate     DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  startDate   DateTime
+  endDate     DateTime?
+  location    String?
+  userId      Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@map("tasks")
-}
-enum ExpenseCategory {
-  FOOD
-  TRANSPORT
-  STUDY
-  HEALTH
-  ENTERTAINMENT
-  SERVICES
-  OTHER
-}
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-model Expense {
-  id          Int             @id @default(autoincrement())
-  title       String
-  amount      Decimal         @db.Decimal(10, 2)
-  category    ExpenseCategory @default(OTHER)
-  description String?
-  expenseDate DateTime        @default(now())
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  @@map("expenses")
-}
-enum ReminderStatus {
-  PENDING
-  DONE
-  CANCELLED
+  @@map("calendar_events")
 }
 
 model Reminder {
@@ -65,21 +95,75 @@ model Reminder {
   description String?
   remindAt    DateTime
   status      ReminderStatus @default(PENDING)
-  priority    Priority       @default(MEDIUM)
+  userId      Int
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("reminders")
 }
-model AgendaEvent {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?
-  startTime   DateTime
-  endTime     DateTime
-  location    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  @@map("agenda_events")
+model Habit {
+  id          Int            @id @default(autoincrement())
+  name        String
+  description String?
+  frequency   HabitFrequency @default(DAILY)
+  goal        Int?
+  color       String?
+  userId      Int
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs HabitLog[]
+
+  @@map("habits")
+}
+
+model HabitLog {
+  id        Int      @id @default(autoincrement())
+  habitId   Int
+  userId    Int
+  date      DateTime
+  completed Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@map("habit_logs")
+}
+
+model FinanceCategory {
+  id        Int             @id @default(autoincrement())
+  name      String
+  type      TransactionType
+  color     String?
+  userId    Int
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+
+  @@map("finance_categories")
+}
+
+model FinanceTransaction {
+  id              Int             @id @default(autoincrement())
+  type            TransactionType
+  amount          Decimal         @db.Decimal(12, 2)
+  description     String?
+  transactionDate DateTime
+  userId          Int
+  categoryId      Int?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@map("finance_transactions")
 }

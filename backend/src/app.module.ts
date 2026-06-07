@@ -1,15 +1,21 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
-import { TasksModule } from './tasks/tasks.module';
-import { ExpensesModule } from './expenses/expenses.module';
 import { RemindersModule } from './reminders/reminders.module';
-import { AgendaModule } from './agenda/agenda.module';
+import { NotesModule } from './notes/notes.module';
+import { NoteCategoriesModule } from './note-categories/note-categories.module';
 
 @Module({
-  imports: [PrismaModule, TasksModule, ExpensesModule, RemindersModule, AgendaModule],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    PrismaModule,
+    RemindersModule,
+    NotesModule,
+    NoteCategoriesModule,
+  ],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}
