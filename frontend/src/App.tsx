@@ -13,6 +13,9 @@ import Dashboard from './components/modules/Dashboard';
 export type View = 'dashboard' | 'notes' | 'calendar' | 'reminders' | 'habits' | 'finances';
 export type ToastItem = { id: number; message: string; type?: 'success' | 'error' };
 type AuthUser = { id: number; name: string; email: string };
+type NotificationState = NotificationPermission | 'unsupported';
+
+const NOTIFIED_REMINDERS_KEY = 'lm:notifiedReminders';
 
 function App() {
   const [active, setActive] = useState<View>('dashboard');
@@ -29,6 +32,10 @@ function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [notificationState, setNotificationState] = useState<NotificationState>(() => (
+    'Notification' in window ? Notification.permission : 'unsupported'
+  ));
+  const [now, setNow] = useState(() => Date.now());
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -85,6 +92,49 @@ function App() {
       });
   }, [loadAll]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    const dueReminders = reminders.filter((reminder) => {
+      const status = reminder.status || 'PENDING';
+      return status === 'PENDING' && new Date(reminder.remindAt).getTime() <= now;
+    });
+
+    if (dueReminders.length === 0) {
+      return;
+    }
+
+    const notified = new Set(JSON.parse(localStorage.getItem(NOTIFIED_REMINDERS_KEY) || '[]') as string[]);
+
+    dueReminders.forEach((reminder) => {
+      const notificationKey = `${reminder.id}:${reminder.remindAt}`;
+
+      if (notified.has(notificationKey)) {
+        return;
+      }
+
+      showToast(`Recordatorio vencido: ${reminder.title}`, 'error');
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Recordatorio pendiente', {
+          body: reminder.description || reminder.title,
+          tag: `lifemanager-reminder-${reminder.id}`,
+        });
+      }
+
+      notified.add(notificationKey);
+    });
+
+    localStorage.setItem(NOTIFIED_REMINDERS_KEY, JSON.stringify([...notified]));
+  }, [authUser, reminders, now, showToast]);
+
   function handleLogout() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     setAuthUser(null);
@@ -96,6 +146,23 @@ function App() {
     setFinSummary(null);
     setTransactions([]);
     setFinCategories([]);
+  }
+
+  async function requestNotifications() {
+    if (!('Notification' in window)) {
+      setNotificationState('unsupported');
+      showToast('Tu navegador no soporta notificaciones', 'error');
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationState(permission);
+
+    if (permission === 'granted') {
+      showToast('Notificaciones activadas', 'success');
+    } else {
+      showToast('No se activaron las notificaciones', 'error');
+    }
   }
 
   function formatAmount(amount: any) {
@@ -113,6 +180,10 @@ function App() {
     { id: 'habits', label: 'Hábitos', icon: '◎', count: habits.length },
     { id: 'finances', label: 'Finanzas', icon: '◈' },
   ];
+  const dueReminders = reminders.filter((reminder) => {
+    const status = reminder.status || 'PENDING';
+    return status === 'PENDING' && new Date(reminder.remindAt).getTime() <= now;
+  });
 
   if (loading) {
     return (
@@ -164,6 +235,16 @@ function App() {
               <option value="USD">USD $</option>
             </select>
           </label>
+          <div className="notification-control">
+            <span>Notificaciones</span>
+            {notificationState === 'granted' ? (
+              <strong>Activas</strong>
+            ) : (
+              <button onClick={requestNotifications} disabled={notificationState === 'unsupported'}>
+                Activar
+              </button>
+            )}
+          </div>
           <button className="logout-button" onClick={handleLogout}>Cerrar sesión</button>
         </div>
       </aside>
@@ -175,6 +256,15 @@ function App() {
           <span className="brand-icon-sm">✦</span>
         </header>
         <main className="content">
+          {dueReminders.length > 0 && (
+            <div className="notification-banner">
+              <div>
+                <strong>{dueReminders.length} recordatorio{dueReminders.length === 1 ? '' : 's'} pendiente{dueReminders.length === 1 ? '' : 's'}</strong>
+                <span>Hay recordatorios vencidos esperando tu atención.</span>
+              </div>
+              <button onClick={() => setActive('reminders')}>Ver</button>
+            </div>
+          )}
           {active === 'dashboard' && <Dashboard notes={notes} reminders={reminders} habits={habits} transactions={transactions} finSummary={finSummary} formatAmount={formatAmount} setActive={setActive} />}
           {active === 'notes' && <NotesModule notes={notes} noteCategories={noteCategories} reload={loadAll} showToast={showToast} />}
           {active === 'calendar' && <CalendarModule events={events} reload={loadAll} showToast={showToast} />}

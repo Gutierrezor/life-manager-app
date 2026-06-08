@@ -17,14 +17,14 @@ services:
       context: ./backend
       args:
         DATABASE_URL: postgresql://postgres:postgres@postgres:5432/life_manager_db?schema=public
-        JWT_SECRET: "${JWT_SECRET:-change-me}"
+        JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required}"
     container_name: life_manager_backend
     restart: always
     ports:
       - "3000:3000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/life_manager_db?schema=public
-      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       PORT: 3000
     depends_on:
       - postgres

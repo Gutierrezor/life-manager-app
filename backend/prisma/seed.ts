@@ -20,8 +20,6 @@ const prisma = new PrismaClient({
   }),
 });
 
-const userId = 1;
-
 function daysFromNow(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -37,29 +35,27 @@ function atTime(date: Date, hours: number, minutes = 0) {
 async function main() {
   const demoPassword = await bcrypt.hash('demo-password', 12);
 
-  await prisma.habitLog.deleteMany({ where: { userId } });
-  await prisma.financeTransaction.deleteMany({ where: { userId } });
-  await prisma.financeCategory.deleteMany({ where: { userId } });
-  await prisma.reminder.deleteMany({ where: { userId } });
-  await prisma.calendarEvent.deleteMany({ where: { userId } });
-  await prisma.note.deleteMany({ where: { userId } });
-  await prisma.noteCategory.deleteMany({ where: { userId } });
-  await prisma.habit.deleteMany({ where: { userId } });
-
   const user = await prisma.user.upsert({
-    where: { id: userId },
+    where: { email: 'demo@lifemanager.local' },
     update: {
       name: 'Demo User',
-      email: 'demo@lifemanager.local',
       password: demoPassword,
     },
     create: {
-      id: userId,
       name: 'Demo User',
       email: 'demo@lifemanager.local',
       password: demoPassword,
     },
   });
+
+  await prisma.habitLog.deleteMany({ where: { userId: user.id } });
+  await prisma.financeTransaction.deleteMany({ where: { userId: user.id } });
+  await prisma.financeCategory.deleteMany({ where: { userId: user.id } });
+  await prisma.reminder.deleteMany({ where: { userId: user.id } });
+  await prisma.calendarEvent.deleteMany({ where: { userId: user.id } });
+  await prisma.note.deleteMany({ where: { userId: user.id } });
+  await prisma.noteCategory.deleteMany({ where: { userId: user.id } });
+  await prisma.habit.deleteMany({ where: { userId: user.id } });
 
   const personal = await prisma.noteCategory.create({
     data: {

@@ -102,6 +102,23 @@ textarea { resize: vertical; }
   color: #c4b5fd;
 }
 
+.demo-login-button {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.demo-login-button:hover {
+  border-color: var(--accent);
+  color: #c4b5fd;
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -259,6 +276,36 @@ textarea { resize: vertical; }
   font-size: 0.82rem;
 }
 
+.notification-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.notification-control strong {
+  color: var(--green);
+  font-size: 0.78rem;
+}
+
+.notification-control button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  padding: 5px 9px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.notification-control button:hover {
+  border-color: var(--accent);
+  color: #c4b5fd;
+}
+
 .logout-button {
   width: 100%;
   margin-top: 12px;
@@ -320,6 +367,43 @@ textarea { resize: vertical; }
   flex: 1;
   padding: 28px 32px 60px;
   min-width: 0;
+}
+
+.notification-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(244,99,122,0.26);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(244,99,122,0.16), rgba(124,92,255,0.1));
+}
+
+.notification-banner div {
+  display: grid;
+  gap: 3px;
+}
+
+.notification-banner strong {
+  color: #fecdd3;
+  font-size: 0.94rem;
+}
+
+.notification-banner span {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.notification-banner button {
+  border: 1px solid rgba(254,205,211,0.24);
+  border-radius: 9px;
+  background: rgba(244,99,122,0.16);
+  color: #fecdd3;
+  padding: 8px 12px;
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 /* ===== MODULE LAYOUT ===== */

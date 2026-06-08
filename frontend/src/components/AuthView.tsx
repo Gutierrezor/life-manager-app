@@ -12,7 +12,7 @@ type AuthResponse = {
 
 export default function AuthView({ onAuth }: { onAuth: (user: AuthResponse['user']) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [form, setForm] = useState({ name: '', email: 'demo@lifemanager.local', password: 'demo-password' });
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -48,6 +48,16 @@ export default function AuthView({ onAuth }: { onAuth: (user: AuthResponse['user
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Entrar</button>
           <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>Crear cuenta</button>
         </div>
+
+        {mode === 'login' && (
+          <button
+            type="button"
+            className="demo-login-button"
+            onClick={() => setForm({ name: '', email: 'demo@lifemanager.local', password: 'demo-password' })}
+          >
+            Usar cuenta demo
+          </button>
+        )}
 
         <form onSubmit={submit} className="auth-form">
           {mode === 'register' && (

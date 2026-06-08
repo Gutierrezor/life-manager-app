@@ -43,3 +43,19 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const hadToken = Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
+
+      if (hadToken) {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        window.location.assign('/');
+      }
+    }
+
+    return Promise.reject(error);
+  },
+);

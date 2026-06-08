@@ -50,17 +50,9 @@ export class AuthService {
     }
 
     const isValid = await bcrypt.compare(loginDto.password, user.password);
-    const needsPasswordMigration = !isValid && user.password === loginDto.password;
 
-    if (!isValid && !needsPasswordMigration) {
+    if (!isValid) {
       throw new UnauthorizedException('Credenciales inválidas');
-    }
-
-    if (needsPasswordMigration) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { password: await bcrypt.hash(loginDto.password, 12) },
-      });
     }
 
     return this.createSession({
