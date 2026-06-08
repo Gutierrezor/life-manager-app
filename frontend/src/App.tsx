@@ -29,7 +29,9 @@ function App() {
 
   // Form state
   const [noteForm, setNoteForm] = useState({ title: '', content: '', categoryId: '' });
+  const [noteCategoryForm, setNoteCategoryForm] = useState({ name: '', color: '#6366f1' });
   const [txForm, setTxForm] = useState({ type: 'EXPENSE', amount: '', description: '', categoryId: '' });
+  const [financeCategoryForm, setFinanceCategoryForm] = useState({ name: '', type: 'EXPENSE', color: '#ef4444' });
   const [remForm, setRemForm] = useState({ title: '', description: '', remindAt: '' });
 
   async function loadAll() {
@@ -84,6 +86,24 @@ function App() {
     }
   }
 
+  async function createNoteCategory(e?: React.FormEvent) {
+    e?.preventDefault();
+    try {
+      await api.post('/note-categories', {
+        name: noteCategoryForm.name,
+        color: noteCategoryForm.color || undefined,
+        userId: 1,
+      });
+      setNoteCategoryForm({ name: '', color: '#6366f1' });
+      await loadAll();
+      showToast('Categoría creada', 'success');
+      setActive('notes');
+    } catch (err) {
+      console.error('Failed to create note category', err);
+      showToast('Error creando categoría', 'error');
+    }
+  }
+
   async function createTransaction(e?: React.FormEvent) {
     e?.preventDefault();
     try {
@@ -102,6 +122,25 @@ function App() {
     } catch (err) {
       console.error('Failed to create transaction', err);
       showToast('Error registrando transacción', 'error');
+    }
+  }
+
+  async function createFinanceCategory(e?: React.FormEvent) {
+    e?.preventDefault();
+    try {
+      await api.post('/finances/categories', {
+        name: financeCategoryForm.name,
+        type: financeCategoryForm.type,
+        color: financeCategoryForm.color || undefined,
+        userId: 1,
+      });
+      setFinanceCategoryForm({ name: '', type: 'EXPENSE', color: '#ef4444' });
+      await loadAll();
+      showToast('Categoría financiera creada', 'success');
+      setActive('finances');
+    } catch (err) {
+      console.error('Failed to create finance category', err);
+      showToast('Error creando categoría financiera', 'error');
     }
   }
 
@@ -154,7 +193,18 @@ function App() {
               }
 
   function isoDate(d: Date) {
-    return d.toISOString().slice(0, 10);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatHabitDay(d: Date) {
+    return {
+      key: isoDate(d),
+      dayName: d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', ''),
+      dayNumber: d.getDate(),
+    };
   }
 
   async function toggleHabitToday(habit: any) {
@@ -203,15 +253,15 @@ function App() {
             </div>
             <div className="finance-stats">
               <div className="stat-card purple">
-                <strong>{finSummary?.balance ? formatAmount(finSummary.balance) : '—'}</strong>
+                <strong>{finSummary?.balance != null ? formatAmount(finSummary.balance) : '—'}</strong>
                 <span>Balance</span>
               </div>
               <div className="stat-card green">
-                <strong>{finSummary?.income ? formatAmount(finSummary.income) : '—'}</strong>
+                <strong>{finSummary?.totalIncome != null ? formatAmount(finSummary.totalIncome) : '—'}</strong>
                 <span>Ingresos</span>
               </div>
               <div className="stat-card red">
-                <strong>{finSummary?.expenses ? formatAmount(finSummary.expenses) : '—'}</strong>
+                <strong>{finSummary?.totalExpense != null ? formatAmount(finSummary.totalExpense) : '—'}</strong>
                 <span>Gastos</span>
               </div>
               <div className="stat-card">
@@ -271,6 +321,12 @@ function App() {
               <div />
             </div>
 
+            <form className="form-panel category-form" onSubmit={createNoteCategory}>
+              <input placeholder="Nueva categoría" value={noteCategoryForm.name} onChange={(e) => setNoteCategoryForm({ ...noteCategoryForm, name: e.target.value })} />
+              <input type="color" value={noteCategoryForm.color} onChange={(e) => setNoteCategoryForm({ ...noteCategoryForm, color: e.target.value })} />
+              <button type="submit">Crear categoría</button>
+            </form>
+
             <form className="form-panel" onSubmit={createNote}>
               <input placeholder="Título" value={noteForm.title} onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })} />
               <input placeholder="Contenido" value={noteForm.content} onChange={(e) => setNoteForm({ ...noteForm, content: e.target.value })} />
@@ -280,6 +336,15 @@ function App() {
               </select>
               <button type="submit">Crear nota</button>
             </form>
+
+            <div className="category-list">
+              {noteCategories.map((c: any) => (
+                <span className="category-chip" key={c.id}>
+                  <span style={{ background: c.color ?? '#6366f1' }} />
+                  {c.name}
+                </span>
+              ))}
+            </div>
 
             <div>
               {notes.length === 0 ? <div className="empty-state">No hay notas</div> : notes.map((n: any) => (
@@ -331,8 +396,18 @@ function App() {
               <h1>Finanzas</h1>
             </div>
 
+            <form className="form-panel" onSubmit={createFinanceCategory}>
+              <select value={financeCategoryForm.type} onChange={(e) => setFinanceCategoryForm({ ...financeCategoryForm, type: e.target.value })}>
+                <option value="EXPENSE">Gasto</option>
+                <option value="INCOME">Ingreso</option>
+              </select>
+              <input placeholder="Nueva categoría" value={financeCategoryForm.name} onChange={(e) => setFinanceCategoryForm({ ...financeCategoryForm, name: e.target.value })} />
+              <input type="color" value={financeCategoryForm.color} onChange={(e) => setFinanceCategoryForm({ ...financeCategoryForm, color: e.target.value })} />
+              <button type="submit">Crear categoría</button>
+            </form>
+
             <form className="form-panel" onSubmit={createTransaction}>
-              <select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value })}>
+              <select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, categoryId: '' })}>
                 <option value="EXPENSE">Gasto</option>
                 <option value="INCOME">Ingreso</option>
               </select>
@@ -340,7 +415,7 @@ function App() {
               <input placeholder="Descripción" value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} />
               <select value={txForm.categoryId} onChange={(e) => setTxForm({ ...txForm, categoryId: e.target.value })}>
                 <option value="">Sin categoría</option>
-                {finCategories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {finCategories.filter((c: any) => c.type === txForm.type).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <button type="submit">Registrar</button>
             </form>
@@ -351,6 +426,15 @@ function App() {
                 <pre>{finSummary ? JSON.stringify(finSummary, null, 2) : 'Sin resumen'}</pre>
               </div>
               <div>
+                <h3>Categorías</h3>
+                <div className="category-list">
+                  {finCategories.map((c: any) => (
+                    <span className="category-chip" key={c.id}>
+                      <span style={{ background: c.color ?? '#6366f1' }} />
+                      {c.name} · {c.type === 'INCOME' ? 'Ingreso' : 'Gasto'}
+                    </span>
+                  ))}
+                </div>
                 <h3>Movimientos</h3>
                 {transactions.length === 0 ? <div className="empty-state">No hay transacciones</div> : transactions.map((t: any) => (
                   <div className="list-row" key={t.id}>
@@ -436,13 +520,14 @@ function App() {
               <div className="habits-grid">
                 {habits.map((h: any) => {
                   const today = new Date();
-                  const past7: string[] = [];
+                  const past7: { key: string; dayName: string; dayNumber: number }[] = [];
                   for (let i = 6; i >= 0; i--) {
                     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-                    past7.push(d.toISOString().slice(0, 10));
+                    past7.push(formatHabitDay(d));
                   }
-                  const completedSet = new Set((h.logs || []).filter((l: any) => l.completed).map((l: any) => (new Date(l.date)).toISOString().slice(0, 10)));
-                  const todayDone = completedSet.has(new Date().toISOString().slice(0, 10));
+                  const completedSet = new Set((h.logs || []).filter((l: any) => l.completed).map((l: any) => isoDate(new Date(l.date))));
+                  const todayKey = isoDate(new Date());
+                  const todayDone = completedSet.has(todayKey);
 
                   return (
                     <div className="habit-card" key={h.id}>
@@ -456,7 +541,15 @@ function App() {
 
                       <div className="habit-tracker">
                         {past7.map((d) => (
-                          <div key={d} className={completedSet.has(d) ? 'dot done' : 'dot'} title={d}></div>
+                          <div
+                            key={d.key}
+                            className={`habit-day ${completedSet.has(d.key) ? 'done' : ''} ${d.key === todayKey ? 'today' : ''}`}
+                            title={d.key}
+                          >
+                            <span>{d.dayName}</span>
+                            <strong>{d.dayNumber}</strong>
+                            <small>{completedSet.has(d.key) ? 'Hecho' : '—'}</small>
+                          </div>
                         ))}
                       </div>
                     </div>

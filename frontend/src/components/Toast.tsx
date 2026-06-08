@@ -1,5 +1,3 @@
-import React from 'react';
-
 type ToastItem = { id: number; message: string; type?: 'success' | 'error' };
 
 export default function Toast({ toasts }: { toasts: ToastItem[] }) {
