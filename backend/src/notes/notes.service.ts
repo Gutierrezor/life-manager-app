@@ -7,13 +7,15 @@ import { UpdateNoteDto } from './dto/update-note.dto';
 export class NotesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createNoteDto: CreateNoteDto) {
+  async create(createNoteDto: CreateNoteDto, userId: number) {
+    await this.ensureCategoryBelongsToUser(createNoteDto.categoryId, userId);
+
     return this.prisma.note.create({
       data: {
         title: createNoteDto.title,
         content: createNoteDto.content,
         isFavorite: createNoteDto.isFavorite,
-        userId: createNoteDto.userId,
+        userId,
         categoryId: createNoteDto.categoryId,
       },
       include: {
@@ -22,8 +24,9 @@ export class NotesService {
     });
   }
 
-  findAll() {
+  findAll(userId: number) {
     return this.prisma.note.findMany({
+      where: { userId },
       orderBy: {
         createdAt: 'desc',
       },
@@ -33,9 +36,9 @@ export class NotesService {
     });
   }
 
-  async findOne(id: number) {
-    const note = await this.prisma.note.findUnique({
-      where: { id },
+  async findOne(id: number, userId: number) {
+    const note = await this.prisma.note.findFirst({
+      where: { id, userId },
       include: {
         category: true,
       },
@@ -48,8 +51,9 @@ export class NotesService {
     return note;
   }
 
-  async update(id: number, updateNoteDto: UpdateNoteDto) {
-    await this.findOne(id);
+  async update(id: number, updateNoteDto: UpdateNoteDto, userId: number) {
+    await this.findOne(id, userId);
+    await this.ensureCategoryBelongsToUser(updateNoteDto.categoryId, userId);
 
     return this.prisma.note.update({
       where: { id },
@@ -57,7 +61,6 @@ export class NotesService {
         title: updateNoteDto.title,
         content: updateNoteDto.content,
         isFavorite: updateNoteDto.isFavorite,
-        userId: updateNoteDto.userId,
         categoryId: updateNoteDto.categoryId,
       },
       include: {
@@ -66,11 +69,26 @@ export class NotesService {
     });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.note.delete({
       where: { id },
     });
+  }
+
+  private async ensureCategoryBelongsToUser(categoryId: number | undefined, userId: number) {
+    if (!categoryId) {
+      return;
+    }
+
+    const category = await this.prisma.noteCategory.findFirst({
+      where: { id: categoryId, userId },
+      select: { id: true },
+    });
+
+    if (!category) {
+      throw new NotFoundException(`Note category with id ${categoryId} not found`);
+    }
   }
 }

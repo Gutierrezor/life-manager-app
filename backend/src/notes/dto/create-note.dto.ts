@@ -14,7 +14,8 @@ export class CreateNoteDto {
   isFavorite?: boolean;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 
   @IsInt()
   @IsOptional()

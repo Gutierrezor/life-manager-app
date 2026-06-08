@@ -6,6 +6,7 @@ import {
   TransactionType,
 } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import * as bcrypt from 'bcryptjs';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -34,6 +35,8 @@ function atTime(date: Date, hours: number, minutes = 0) {
 }
 
 async function main() {
+  const demoPassword = await bcrypt.hash('demo-password', 12);
+
   await prisma.habitLog.deleteMany({ where: { userId } });
   await prisma.financeTransaction.deleteMany({ where: { userId } });
   await prisma.financeCategory.deleteMany({ where: { userId } });
@@ -48,13 +51,13 @@ async function main() {
     update: {
       name: 'Demo User',
       email: 'demo@lifemanager.local',
-      password: 'demo-password',
+      password: demoPassword,
     },
     create: {
       id: userId,
       name: 'Demo User',
       email: 'demo@lifemanager.local',
-      password: 'demo-password',
+      password: demoPassword,
     },
   });
 

@@ -1,10 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { api } from './api/api';
+import { useEffect, useState, useCallback } from 'react';
+import { api, AUTH_TOKEN_KEY, getApiErrorMessage } from './api/api';
 import './App.css';
-import CalendarView from './components/CalendarView';
 import Toast from './components/Toast';
+import AuthView from './components/AuthView';
+import NotesModule from './components/modules/NotesModule';
+import RemindersModule from './components/modules/RemindersModule';
+import HabitsModule from './components/modules/HabitsModule';
+import FinancesModule from './components/modules/FinancesModule';
+import CalendarModule from './components/modules/CalendarModule';
+import Dashboard from './components/modules/Dashboard';
 
-type View = 'dashboard' | 'notes' | 'calendar' | 'reminders' | 'habits' | 'finances';
+export type View = 'dashboard' | 'notes' | 'calendar' | 'reminders' | 'habits' | 'finances';
+export type ToastItem = { id: number; message: string; type?: 'success' | 'error' };
+type AuthUser = { id: number; name: string; email: string };
 
 function App() {
   const [active, setActive] = useState<View>('dashboard');
@@ -13,28 +21,22 @@ function App() {
   const [events, setEvents] = useState<any[]>([]);
   const [reminders, setReminders] = useState<any[]>([]);
   const [habits, setHabits] = useState<any[]>([]);
-  const [habitForm, setHabitForm] = useState({ name: '', description: '', frequency: 'DAILY', goal: '', color: '' });
   const [finSummary, setFinSummary] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [finCategories, setFinCategories] = useState<any[]>([]);
   const [currency, setCurrency] = useState<'COP' | 'USD'>(() => (localStorage.getItem('lm:currency') as 'COP' | 'USD') || 'COP');
   const [loading, setLoading] = useState(true);
-  const [toasts, setToasts] = useState<{ id: number; message: string; type?: 'success' | 'error' }[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
 
-  function showToast(message: string, type: 'success' | 'error' = 'success') {
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     setToasts((s) => [...s, { id, message, type }]);
     setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), 4000);
-  }
+  }, []);
 
-  // Form state
-  const [noteForm, setNoteForm] = useState({ title: '', content: '', categoryId: '' });
-  const [noteCategoryForm, setNoteCategoryForm] = useState({ name: '', color: '#6366f1' });
-  const [txForm, setTxForm] = useState({ type: 'EXPENSE', amount: '', description: '', categoryId: '' });
-  const [financeCategoryForm, setFinanceCategoryForm] = useState({ name: '', type: 'EXPENSE', color: '#ef4444' });
-  const [remForm, setRemForm] = useState({ title: '', description: '', remindAt: '' });
-
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [nRes, cRes, eRes, rRes, hRes, sRes, tRes, fcRes] = await Promise.all([
@@ -47,7 +49,6 @@ function App() {
         api.get('/finances/transactions'),
         api.get('/finances/categories'),
       ]);
-
       setNotes(nRes.data ?? []);
       setNoteCategories(cRes.data ?? []);
       setEvents(eRes.data ?? []);
@@ -57,510 +58,132 @@ function App() {
       setTransactions(tRes.data ?? []);
       setFinCategories(fcRes.data ?? []);
     } catch (err) {
-      console.error('Error loading dashboard data', err);
+      console.error('Error loading data', err);
+      showToast(getApiErrorMessage(err), 'error');
     } finally {
       setLoading(false);
     }
-  }
+  }, [showToast]);
 
   useEffect(() => {
-    loadAll();
-  }, []);
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
-  async function createNote(e?: React.FormEvent) {
-    e?.preventDefault();
-    try {
-      await api.post('/notes', {
-        title: noteForm.title,
-        content: noteForm.content,
-        categoryId: noteForm.categoryId ? Number(noteForm.categoryId) : undefined,
-        userId: 1,
-      });
-      setNoteForm({ title: '', content: '', categoryId: '' });
-      await loadAll();
-      showToast('Nota creada', 'success');
-      setActive('notes');
-    } catch (err) {
-      console.error('Failed to create note', err);
-      showToast('Error creando nota', 'error');
+    if (!token) {
+      setLoading(false);
+      return;
     }
-  }
 
-  async function createNoteCategory(e?: React.FormEvent) {
-    e?.preventDefault();
-    try {
-      await api.post('/note-categories', {
-        name: noteCategoryForm.name,
-        color: noteCategoryForm.color || undefined,
-        userId: 1,
+    api.get<AuthUser>('/auth/me')
+      .then(({ data }) => {
+        setAuthUser(data);
+        return loadAll();
+      })
+      .catch(() => {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        setAuthUser(null);
+        setLoading(false);
       });
-      setNoteCategoryForm({ name: '', color: '#6366f1' });
-      await loadAll();
-      showToast('Categoría creada', 'success');
-      setActive('notes');
-    } catch (err) {
-      console.error('Failed to create note category', err);
-      showToast('Error creando categoría', 'error');
-    }
-  }
+  }, [loadAll]);
 
-  async function createTransaction(e?: React.FormEvent) {
-    e?.preventDefault();
-    try {
-      await api.post('/finances/transactions', {
-        type: txForm.type,
-        amount: Number(txForm.amount || 0),
-        description: txForm.description || undefined,
-        transactionDate: new Date().toISOString(),
-        userId: 1,
-        categoryId: txForm.categoryId ? Number(txForm.categoryId) : undefined,
-      });
-      setTxForm({ type: 'EXPENSE', amount: '', description: '', categoryId: '' });
-      await loadAll();
-      showToast('Transacción registrada', 'success');
-      setActive('finances');
-    } catch (err) {
-      console.error('Failed to create transaction', err);
-      showToast('Error registrando transacción', 'error');
-    }
-  }
-
-  async function createFinanceCategory(e?: React.FormEvent) {
-    e?.preventDefault();
-    try {
-      await api.post('/finances/categories', {
-        name: financeCategoryForm.name,
-        type: financeCategoryForm.type,
-        color: financeCategoryForm.color || undefined,
-        userId: 1,
-      });
-      setFinanceCategoryForm({ name: '', type: 'EXPENSE', color: '#ef4444' });
-      await loadAll();
-      showToast('Categoría financiera creada', 'success');
-      setActive('finances');
-    } catch (err) {
-      console.error('Failed to create finance category', err);
-      showToast('Error creando categoría financiera', 'error');
-    }
+  function handleLogout() {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    setAuthUser(null);
+    setNotes([]);
+    setNoteCategories([]);
+    setEvents([]);
+    setReminders([]);
+    setHabits([]);
+    setFinSummary(null);
+    setTransactions([]);
+    setFinCategories([]);
   }
 
   function formatAmount(amount: any) {
     const val = typeof amount === 'string' ? Number(amount) : amount;
-    if (Number.isNaN(val)) return amount;
+    if (Number.isNaN(val)) return String(amount);
     const locale = currency === 'COP' ? 'es-CO' : 'en-US';
-    const opt: Intl.NumberFormatOptions = { style: 'currency', currency };
-    return new Intl.NumberFormat(locale, opt).format(val);
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(val);
   }
 
-  async function createReminder(e?: React.FormEvent) {
-    e?.preventDefault();
-    try {
-      await api.post('/reminders', {
-        title: remForm.title,
-        description: remForm.description || undefined,
-        remindAt: remForm.remindAt || new Date().toISOString(),
-        userId: 1,
-      });
-      setRemForm({ title: '', description: '', remindAt: '' });
-      await loadAll();
-      showToast('Recordatorio creado', 'success');
-      setActive('reminders');
-    } catch (err) {
-      console.error('Failed to create reminder', err);
-      showToast('Error creando recordatorio', 'error');
-    }
+  const navItems: { id: View; label: string; icon: string; count?: number }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
+    { id: 'notes', label: 'Notas', icon: '✎', count: notes.length },
+    { id: 'calendar', label: 'Calendario', icon: '▦', count: events.length },
+    { id: 'reminders', label: 'Recordatorios', icon: '◉', count: reminders.length },
+    { id: 'habits', label: 'Hábitos', icon: '◎', count: habits.length },
+    { id: 'finances', label: 'Finanzas', icon: '◈' },
+  ];
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-logo">✦</div>
+        <span>Cargando LifeManager…</span>
+      </div>
+    );
   }
 
-  async function createHabit(e?: React.FormEvent) {
-    e?.preventDefault();
-    try {
-      await api.post('/habits', {
-        name: habitForm.name,
-        description: habitForm.description || undefined,
-        frequency: habitForm.frequency,
-        goal: habitForm.goal ? Number(habitForm.goal) : undefined,
-        color: habitForm.color || undefined,
-        userId: 1,
-      });
-      setHabitForm({ name: '', description: '', frequency: 'DAILY', goal: '', color: '' });
-      await loadAll();
-      showToast('Hábito creado', 'success');
-      setActive('habits');
-    } catch (err) {
-      console.error('Failed to create habit', err);
-      showToast('Error creando hábito', 'error');
-    }
-              }
-
-  function isoDate(d: Date) {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  if (!authUser) {
+    return <AuthView onAuth={(user) => { setAuthUser(user); loadAll(); }} />;
   }
-
-  function formatHabitDay(d: Date) {
-    return {
-      key: isoDate(d),
-      dayName: d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', ''),
-      dayNumber: d.getDate(),
-    };
-  }
-
-  async function toggleHabitToday(habit: any) {
-    try {
-      const today = isoDate(new Date());
-      // find today's log if any
-      const todayLog = (habit.logs || []).find((l: any) => (new Date(l.date)).toISOString().slice(0, 10) === today);
-      const payload = { date: today, userId: 1, completed: !(todayLog?.completed ?? false) };
-      await api.post(`/habits/${habit.id}/check`, payload);
-      await loadAll();
-    } catch (err) {
-      console.error('Failed to toggle habit', err);
-    }
-  }
-
-  if (loading) return <div className="app">Cargando datos...</div>;
 
   return (
-    <main className="app">
+    <div className="layout">
       <Toast toasts={toasts} />
-      <header className="navbar">
-        <div className="brand">
-          <span>✦</span>
-          <strong>LifeManager App</strong>
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand">
+          <span className="brand-icon">✦</span>
+          <strong>LifeManager</strong>
         </div>
-        <nav className="nav-actions">
-          <button className={active === 'dashboard' ? 'active' : ''} onClick={() => setActive('dashboard')}>Dashboard</button>
-          <button className={active === 'notes' ? 'active' : ''} onClick={() => setActive('notes')}>Notas ({notes.length})</button>
-          <button className={active === 'calendar' ? 'active' : ''} onClick={() => setActive('calendar')}>Calendario ({events.length})</button>
-          <button className={active === 'reminders' ? 'active' : ''} onClick={() => setActive('reminders')}>Recordatorios ({reminders.length})</button>
-          <button className={active === 'habits' ? 'active' : ''} onClick={() => setActive('habits')}>Hábitos ({habits.length})</button>
-          <button className={active === 'finances' ? 'active' : ''} onClick={() => setActive('finances')}>Finanzas</button>
-          <select value={currency} onChange={(e) => { const v = e.target.value as 'COP' | 'USD'; setCurrency(v); localStorage.setItem('lm:currency', v); }}>
-            <option value="COP">COP</option>
-            <option value="USD">USD</option>
-          </select>
-        </nav>
-      </header>
-
-      {active === 'dashboard' && (
-        <section className="dashboard">
-          <article className="panel">
-            <div className="section-header">
-              <h1>Resumen financiero</h1>
-              <div className="section-actions" />
-            </div>
-            <div className="finance-stats">
-              <div className="stat-card purple">
-                <strong>{finSummary?.balance != null ? formatAmount(finSummary.balance) : '—'}</strong>
-                <span>Balance</span>
-              </div>
-              <div className="stat-card green">
-                <strong>{finSummary?.totalIncome != null ? formatAmount(finSummary.totalIncome) : '—'}</strong>
-                <span>Ingresos</span>
-              </div>
-              <div className="stat-card red">
-                <strong>{finSummary?.totalExpense != null ? formatAmount(finSummary.totalExpense) : '—'}</strong>
-                <span>Gastos</span>
-              </div>
-              <div className="stat-card">
-                <strong>{transactions.length}</strong>
-                <span>Transacciones</span>
-              </div>
-            </div>
-          </article>
-
-          <article className="panel">
-            <div className="section-header">
-              <h1>Transacciones recientes</h1>
-              <div />
-            </div>
-            <div className="movements-panel">
-              {transactions.length === 0 ? (
-                <div className="empty-state"><span>🪙</span>No hay transacciones</div>
-              ) : (
-                transactions.slice(0, 10).map((t: any) => (
-                  <div className="list-row" key={t.id}>
-                    <div>
-                      <strong>{t.description ?? t.title ?? 'Transacción'}</strong>
-                      <p>{formatAmount(t.amount)} — {t.type}</p>
-                    </div>
-                    <div>{new Date(t.transactionDate).toLocaleString()}</div>
-                  </div>
-                ))
+        <nav className="sidebar-nav">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              className={`nav-item ${active === item.id ? 'active' : ''}`}
+              onClick={() => { setActive(item.id); setSidebarOpen(false); }}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+              {item.count !== undefined && item.count > 0 && (
+                <span className="nav-badge">{item.count}</span>
               )}
-            </div>
-          </article>
-
-          <article className="panel">
-            <div className="section-header">
-              <h1>Notas recientes</h1>
-            </div>
-            {notes.length === 0 ? (
-              <div className="empty-state"><span>✍️</span>No hay notas</div>
-            ) : (
-              notes.slice(0, 10).map((n: any) => (
-                <div className="list-row" key={n.id}>
-                  <div>
-                    <strong>{n.title}</strong>
-                    <p>{n.content}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </article>
-        </section>
-      )}
-
-      {active === 'notes' && (
-        <section>
-          <div className="panel">
-            <div className="section-header">
-              <h1>Notas</h1>
-              <div />
-            </div>
-
-            <form className="form-panel category-form" onSubmit={createNoteCategory}>
-              <input placeholder="Nueva categoría" value={noteCategoryForm.name} onChange={(e) => setNoteCategoryForm({ ...noteCategoryForm, name: e.target.value })} />
-              <input type="color" value={noteCategoryForm.color} onChange={(e) => setNoteCategoryForm({ ...noteCategoryForm, color: e.target.value })} />
-              <button type="submit">Crear categoría</button>
-            </form>
-
-            <form className="form-panel" onSubmit={createNote}>
-              <input placeholder="Título" value={noteForm.title} onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })} />
-              <input placeholder="Contenido" value={noteForm.content} onChange={(e) => setNoteForm({ ...noteForm, content: e.target.value })} />
-              <select value={noteForm.categoryId} onChange={(e) => setNoteForm({ ...noteForm, categoryId: e.target.value })}>
-                <option value="">Sin categoría</option>
-                {noteCategories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <button type="submit">Crear nota</button>
-            </form>
-
-            <div className="category-list">
-              {noteCategories.map((c: any) => (
-                <span className="category-chip" key={c.id}>
-                  <span style={{ background: c.color ?? '#6366f1' }} />
-                  {c.name}
-                </span>
-              ))}
-            </div>
-
-            <div>
-              {notes.length === 0 ? <div className="empty-state">No hay notas</div> : notes.map((n: any) => (
-                <div className="list-row" key={n.id}>
-                  <div>
-                    <strong>{n.title}</strong>
-                    <p>{n.content}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <div className="user-mini">
+            <strong>{authUser.name}</strong>
+            <span>{authUser.email}</span>
           </div>
-        </section>
-      )}
+          <label className="currency-toggle">
+            <span>Moneda</span>
+            <select value={currency} onChange={(e) => { const v = e.target.value as 'COP' | 'USD'; setCurrency(v); localStorage.setItem('lm:currency', v); }}>
+              <option value="COP">COP $</option>
+              <option value="USD">USD $</option>
+            </select>
+          </label>
+          <button className="logout-button" onClick={handleLogout}>Cerrar sesión</button>
+        </div>
+      </aside>
 
-      {active === 'reminders' && (
-        <section>
-          <div className="panel">
-            <div className="section-header">
-              <h1>Recordatorios</h1>
-            </div>
-
-            <form className="form-panel" onSubmit={createReminder}>
-              <input placeholder="Título" value={remForm.title} onChange={(e) => setRemForm({ ...remForm, title: e.target.value })} />
-              <input placeholder="Descripción" value={remForm.description} onChange={(e) => setRemForm({ ...remForm, description: e.target.value })} />
-              <input type="datetime-local" value={remForm.remindAt} onChange={(e) => setRemForm({ ...remForm, remindAt: e.target.value })} />
-              <button type="submit">Crear recordatorio</button>
-            </form>
-
-            <div>
-              {reminders.length === 0 ? <div className="empty-state">No hay recordatorios</div> : reminders.map((r: any) => (
-                <div className="list-row" key={r.id}>
-                  <div>
-                    <strong>{r.title}</strong>
-                    <p>{r.description}</p>
-                  </div>
-                  <div>{new Date(r.remindAt).toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {active === 'finances' && (
-        <section>
-          <div className="panel">
-            <div className="section-header">
-              <h1>Finanzas</h1>
-            </div>
-
-            <form className="form-panel" onSubmit={createFinanceCategory}>
-              <select value={financeCategoryForm.type} onChange={(e) => setFinanceCategoryForm({ ...financeCategoryForm, type: e.target.value })}>
-                <option value="EXPENSE">Gasto</option>
-                <option value="INCOME">Ingreso</option>
-              </select>
-              <input placeholder="Nueva categoría" value={financeCategoryForm.name} onChange={(e) => setFinanceCategoryForm({ ...financeCategoryForm, name: e.target.value })} />
-              <input type="color" value={financeCategoryForm.color} onChange={(e) => setFinanceCategoryForm({ ...financeCategoryForm, color: e.target.value })} />
-              <button type="submit">Crear categoría</button>
-            </form>
-
-            <form className="form-panel" onSubmit={createTransaction}>
-              <select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, categoryId: '' })}>
-                <option value="EXPENSE">Gasto</option>
-                <option value="INCOME">Ingreso</option>
-              </select>
-              <input placeholder="Monto" type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} />
-              <input placeholder="Descripción" value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} />
-              <select value={txForm.categoryId} onChange={(e) => setTxForm({ ...txForm, categoryId: e.target.value })}>
-                <option value="">Sin categoría</option>
-                {finCategories.filter((c: any) => c.type === txForm.type).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <button type="submit">Registrar</button>
-            </form>
-
-            <div className="finance-layout">
-              <div>
-                <h3>Resumen</h3>
-                <pre>{finSummary ? JSON.stringify(finSummary, null, 2) : 'Sin resumen'}</pre>
-              </div>
-              <div>
-                <h3>Categorías</h3>
-                <div className="category-list">
-                  {finCategories.map((c: any) => (
-                    <span className="category-chip" key={c.id}>
-                      <span style={{ background: c.color ?? '#6366f1' }} />
-                      {c.name} · {c.type === 'INCOME' ? 'Ingreso' : 'Gasto'}
-                    </span>
-                  ))}
-                </div>
-                <h3>Movimientos</h3>
-                {transactions.length === 0 ? <div className="empty-state">No hay transacciones</div> : transactions.map((t: any) => (
-                  <div className="list-row" key={t.id}>
-                    <div>
-                      <strong>{t.description ?? t.title}</strong>
-                      <p>{formatAmount(t.amount)} — {t.type}</p>
-                    </div>
-                    <div>{new Date(t.transactionDate).toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {active === 'calendar' && (
-        <section>
-          <div className="panel">
-            <div className="section-header">
-              <h1>Calendario</h1>
-              <div />
-            </div>
-
-            <CalendarView
-              events={events}
-              onCreate={async (data) => {
-                try {
-                  await api.post('/calendar-events', { ...data, userId: 1 });
-                  await loadAll();
-                  showToast('Evento creado', 'success');
-                } catch (err) {
-                  console.error('Failed to create event', err);
-                  showToast('Error creando evento', 'error');
-                }
-              }}
-              onUpdate={async (id, updates) => {
-                try {
-                  await api.patch(`/calendar-events/${id}`, updates);
-                  await loadAll();
-                  showToast('Evento actualizado', 'success');
-                } catch (err) {
-                  console.error('Failed to update event', err);
-                  showToast('Error actualizando evento', 'error');
-                }
-              }}
-              onDelete={async (id) => {
-                try {
-                  await api.delete(`/calendar-events/${id}`);
-                  await loadAll();
-                  showToast('Evento eliminado', 'success');
-                } catch (err) {
-                  console.error('Failed to delete event', err);
-                  showToast('Error eliminando evento', 'error');
-                }
-              }}
-            />
-          </div>
-        </section>
-      )}
-
-      {active === 'habits' && (
-        <section>
-          <div className="panel">
-            <div className="section-header">
-              <h1>Hábitos</h1>
-            </div>
-
-            <form className="form-panel" onSubmit={createHabit}>
-              <input placeholder="Nombre del hábito" value={habitForm.name} onChange={(e) => setHabitForm({ ...habitForm, name: e.target.value })} />
-              <input placeholder="Descripción" value={habitForm.description} onChange={(e) => setHabitForm({ ...habitForm, description: e.target.value })} />
-              <select value={habitForm.frequency} onChange={(e) => setHabitForm({ ...habitForm, frequency: e.target.value })}>
-                <option value="DAILY">Diario</option>
-                <option value="WEEKLY">Semanal</option>
-                <option value="MONTHLY">Mensual</option>
-              </select>
-              <input placeholder="Meta (veces)" type="number" value={habitForm.goal} onChange={(e) => setHabitForm({ ...habitForm, goal: e.target.value })} />
-              <input placeholder="Color (hex)" value={habitForm.color} onChange={(e) => setHabitForm({ ...habitForm, color: e.target.value })} />
-              <button type="submit">Crear hábito</button>
-            </form>
-
-            {habits.length === 0 ? <div className="empty-state">No hay hábitos</div> : (
-              <div className="habits-grid">
-                {habits.map((h: any) => {
-                  const today = new Date();
-                  const past7: { key: string; dayName: string; dayNumber: number }[] = [];
-                  for (let i = 6; i >= 0; i--) {
-                    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-                    past7.push(formatHabitDay(d));
-                  }
-                  const completedSet = new Set((h.logs || []).filter((l: any) => l.completed).map((l: any) => isoDate(new Date(l.date))));
-                  const todayKey = isoDate(new Date());
-                  const todayDone = completedSet.has(todayKey);
-
-                  return (
-                    <div className="habit-card" key={h.id}>
-                      <div className="habit-head">
-                        <strong>{h.name}</strong>
-                        <div>
-                          <button className={todayDone ? 'btn-done' : ''} onClick={() => toggleHabitToday(h)}>{todayDone ? 'Hecho hoy' : 'Marcar hoy'}</button>
-                        </div>
-                      </div>
-                      <div className="habit-meta">{h.description}</div>
-
-                      <div className="habit-tracker">
-                        {past7.map((d) => (
-                          <div
-                            key={d.key}
-                            className={`habit-day ${completedSet.has(d.key) ? 'done' : ''} ${d.key === todayKey ? 'today' : ''}`}
-                            title={d.key}
-                          >
-                            <span>{d.dayName}</span>
-                            <strong>{d.dayNumber}</strong>
-                            <small>{completedSet.has(d.key) ? 'Hecho' : '—'}</small>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-    </main>
+      <div className="main-wrapper">
+        <header className="topbar">
+          <button className="menu-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
+          <span className="topbar-title">{navItems.find(n => n.id === active)?.label}</span>
+          <span className="brand-icon-sm">✦</span>
+        </header>
+        <main className="content">
+          {active === 'dashboard' && <Dashboard notes={notes} reminders={reminders} habits={habits} transactions={transactions} finSummary={finSummary} formatAmount={formatAmount} setActive={setActive} />}
+          {active === 'notes' && <NotesModule notes={notes} noteCategories={noteCategories} reload={loadAll} showToast={showToast} />}
+          {active === 'calendar' && <CalendarModule events={events} reload={loadAll} showToast={showToast} />}
+          {active === 'reminders' && <RemindersModule reminders={reminders} reload={loadAll} showToast={showToast} />}
+          {active === 'habits' && <HabitsModule habits={habits} reload={loadAll} showToast={showToast} />}
+          {active === 'finances' && <FinancesModule transactions={transactions} finCategories={finCategories} finSummary={finSummary} formatAmount={formatAmount} reload={loadAll} showToast={showToast} />}
+        </main>
+      </div>
+    </div>
   );
 }
 

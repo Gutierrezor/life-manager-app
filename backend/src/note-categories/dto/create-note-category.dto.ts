@@ -10,5 +10,6 @@ export class CreateNoteCategoryDto {
   color?: string;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 }

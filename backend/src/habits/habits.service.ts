@@ -8,7 +8,7 @@ import { CheckHabitDto } from './dto/check-habit.dto';
 export class HabitsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createHabitDto: CreateHabitDto) {
+  create(createHabitDto: CreateHabitDto, userId: number) {
     return this.prisma.habit.create({
       data: {
         name: createHabitDto.name,
@@ -16,7 +16,7 @@ export class HabitsService {
         frequency: createHabitDto.frequency,
         goal: createHabitDto.goal,
         color: createHabitDto.color,
-        userId: createHabitDto.userId,
+        userId,
       },
       include: {
         logs: true,
@@ -24,8 +24,9 @@ export class HabitsService {
     });
   }
 
-  findAll() {
+  findAll(userId: number) {
     return this.prisma.habit.findMany({
+      where: { userId },
       orderBy: {
         createdAt: 'desc',
       },
@@ -39,9 +40,9 @@ export class HabitsService {
     });
   }
 
-  async findOne(id: number) {
-    const habit = await this.prisma.habit.findUnique({
-      where: { id },
+  async findOne(id: number, userId: number) {
+    const habit = await this.prisma.habit.findFirst({
+      where: { id, userId },
       include: {
         logs: {
           orderBy: {
@@ -58,8 +59,8 @@ export class HabitsService {
     return habit;
   }
 
-  async update(id: number, updateHabitDto: UpdateHabitDto) {
-    await this.findOne(id);
+  async update(id: number, updateHabitDto: UpdateHabitDto, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.habit.update({
       where: { id },
@@ -69,7 +70,6 @@ export class HabitsService {
         frequency: updateHabitDto.frequency,
         goal: updateHabitDto.goal,
         color: updateHabitDto.color,
-        userId: updateHabitDto.userId,
       },
       include: {
         logs: true,
@@ -77,8 +77,8 @@ export class HabitsService {
     });
   }
 
-  async checkHabit(id: number, checkHabitDto: CheckHabitDto) {
-    await this.findOne(id);
+  async checkHabit(id: number, checkHabitDto: CheckHabitDto, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.habitLog.upsert({
       where: {
@@ -92,15 +92,15 @@ export class HabitsService {
       },
       create: {
         habitId: id,
-        userId: checkHabitDto.userId,
+        userId,
         date: new Date(checkHabitDto.date),
         completed: checkHabitDto.completed ?? true,
       },
     });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.habit.delete({
       where: { id },

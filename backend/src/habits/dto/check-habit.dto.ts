@@ -9,5 +9,6 @@ export class CheckHabitDto {
   completed?: boolean;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 }

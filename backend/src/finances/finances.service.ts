@@ -8,19 +8,20 @@ import { CreateFinanceTransactionDto } from './dto/create-finance-transaction.dt
 export class FinancesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  createCategory(createFinanceCategoryDto: CreateFinanceCategoryDto) {
+  createCategory(createFinanceCategoryDto: CreateFinanceCategoryDto, userId: number) {
     return this.prisma.financeCategory.create({
       data: {
         name: createFinanceCategoryDto.name,
         type: createFinanceCategoryDto.type,
         color: createFinanceCategoryDto.color,
-        userId: createFinanceCategoryDto.userId,
+        userId,
       },
     });
   }
 
-  findAllCategories() {
+  findAllCategories(userId: number) {
     return this.prisma.financeCategory.findMany({
+      where: { userId },
       orderBy: {
         createdAt: 'desc',
       },
@@ -30,14 +31,20 @@ export class FinancesService {
     });
   }
 
-  createTransaction(createFinanceTransactionDto: CreateFinanceTransactionDto) {
+  async createTransaction(createFinanceTransactionDto: CreateFinanceTransactionDto, userId: number) {
+    await this.ensureCategoryBelongsToUser(
+      createFinanceTransactionDto.categoryId,
+      createFinanceTransactionDto.type,
+      userId,
+    );
+
     return this.prisma.financeTransaction.create({
       data: {
         type: createFinanceTransactionDto.type,
         amount: createFinanceTransactionDto.amount,
         description: createFinanceTransactionDto.description,
         transactionDate: new Date(createFinanceTransactionDto.transactionDate),
-        userId: createFinanceTransactionDto.userId,
+        userId,
         categoryId: createFinanceTransactionDto.categoryId,
       },
       include: {
@@ -46,8 +53,9 @@ export class FinancesService {
     });
   }
 
-  findAllTransactions() {
+  findAllTransactions(userId: number) {
     return this.prisma.financeTransaction.findMany({
+      where: { userId },
       orderBy: {
         transactionDate: 'desc',
       },
@@ -57,9 +65,9 @@ export class FinancesService {
     });
   }
 
-  async findOneTransaction(id: number) {
-    const transaction = await this.prisma.financeTransaction.findUnique({
-      where: { id },
+  async findOneTransaction(id: number, userId: number) {
+    const transaction = await this.prisma.financeTransaction.findFirst({
+      where: { id, userId },
       include: {
         category: true,
       },
@@ -72,16 +80,18 @@ export class FinancesService {
     return transaction;
   }
 
-  async removeTransaction(id: number) {
-    await this.findOneTransaction(id);
+  async removeTransaction(id: number, userId: number) {
+    await this.findOneTransaction(id, userId);
 
     return this.prisma.financeTransaction.delete({
       where: { id },
     });
   }
 
-  async getSummary() {
-    const transactions = await this.prisma.financeTransaction.findMany();
+  async getSummary(userId: number) {
+    const transactions = await this.prisma.financeTransaction.findMany({
+      where: { userId },
+    });
 
     const income = transactions
       .filter((transaction) => transaction.type === TransactionType.INCOME)
@@ -97,5 +107,24 @@ export class FinancesService {
       balance: income - expense,
       totalTransactions: transactions.length,
     };
+  }
+
+  private async ensureCategoryBelongsToUser(
+    categoryId: number | undefined,
+    type: TransactionType,
+    userId: number,
+  ) {
+    if (!categoryId) {
+      return;
+    }
+
+    const category = await this.prisma.financeCategory.findFirst({
+      where: { id: categoryId, type, userId },
+      select: { id: true },
+    });
+
+    if (!category) {
+      throw new NotFoundException(`Finance category with id ${categoryId} not found`);
+    }
   }
 }

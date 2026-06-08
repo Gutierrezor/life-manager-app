@@ -7,18 +7,19 @@ import { UpdateNoteCategoryDto } from './dto/update-note-category.dto';
 export class NoteCategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createNoteCategoryDto: CreateNoteCategoryDto) {
+  create(createNoteCategoryDto: CreateNoteCategoryDto, userId: number) {
     return this.prisma.noteCategory.create({
       data: {
         name: createNoteCategoryDto.name,
         color: createNoteCategoryDto.color,
-        userId: createNoteCategoryDto.userId,
+        userId,
       },
     });
   }
 
-  findAll() {
+  findAll(userId: number) {
     return this.prisma.noteCategory.findMany({
+      where: { userId },
       orderBy: {
         createdAt: 'desc',
       },
@@ -28,9 +29,9 @@ export class NoteCategoriesService {
     });
   }
 
-  async findOne(id: number) {
-    const category = await this.prisma.noteCategory.findUnique({
-      where: { id },
+  async findOne(id: number, userId: number) {
+    const category = await this.prisma.noteCategory.findFirst({
+      where: { id, userId },
       include: {
         notes: true,
       },
@@ -43,21 +44,20 @@ export class NoteCategoriesService {
     return category;
   }
 
-  async update(id: number, updateNoteCategoryDto: UpdateNoteCategoryDto) {
-    await this.findOne(id);
+  async update(id: number, updateNoteCategoryDto: UpdateNoteCategoryDto, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.noteCategory.update({
       where: { id },
       data: {
         name: updateNoteCategoryDto.name,
         color: updateNoteCategoryDto.color,
-        userId: updateNoteCategoryDto.userId,
       },
     });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.noteCategory.delete({
       where: { id },

@@ -18,6 +18,6 @@ export class CreateReminderDto {
   status?: ReminderStatus;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 }
-

@@ -7,7 +7,7 @@ import { UpdateCalendarEventDto } from './dto/update-calendar-event.dto';
 export class CalendarEventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createCalendarEventDto: CreateCalendarEventDto) {
+  create(createCalendarEventDto: CreateCalendarEventDto, userId: number) {
     return this.prisma.calendarEvent.create({
       data: {
         title: createCalendarEventDto.title,
@@ -17,22 +17,23 @@ export class CalendarEventsService {
           ? new Date(createCalendarEventDto.endDate)
           : undefined,
         location: createCalendarEventDto.location,
-        userId: createCalendarEventDto.userId,
+        userId,
       },
     });
   }
 
-  findAll() {
+  findAll(userId: number) {
     return this.prisma.calendarEvent.findMany({
+      where: { userId },
       orderBy: {
         startDate: 'asc',
       },
     });
   }
 
-  async findOne(id: number) {
-    const event = await this.prisma.calendarEvent.findUnique({
-      where: { id },
+  async findOne(id: number, userId: number) {
+    const event = await this.prisma.calendarEvent.findFirst({
+      where: { id, userId },
     });
 
     if (!event) {
@@ -42,8 +43,8 @@ export class CalendarEventsService {
     return event;
   }
 
-  async update(id: number, updateCalendarEventDto: UpdateCalendarEventDto) {
-    await this.findOne(id);
+  async update(id: number, updateCalendarEventDto: UpdateCalendarEventDto, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.calendarEvent.update({
       where: { id },
@@ -57,13 +58,12 @@ export class CalendarEventsService {
           ? new Date(updateCalendarEventDto.endDate)
           : undefined,
         location: updateCalendarEventDto.location,
-        userId: updateCalendarEventDto.userId,
       },
     });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.calendarEvent.delete({
       where: { id },

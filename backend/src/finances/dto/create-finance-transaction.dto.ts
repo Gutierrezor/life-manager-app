@@ -24,7 +24,8 @@ export class CreateFinanceTransactionDto {
   transactionDate: string;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 
   @IsInt()
   @IsOptional()

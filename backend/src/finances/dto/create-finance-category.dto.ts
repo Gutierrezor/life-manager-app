@@ -14,5 +14,6 @@ export class CreateFinanceCategoryDto {
   color?: string;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 }

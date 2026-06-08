@@ -21,5 +21,6 @@ export class CreateCalendarEventDto {
   location?: string;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 }

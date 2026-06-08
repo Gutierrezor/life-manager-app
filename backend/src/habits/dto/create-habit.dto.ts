@@ -29,5 +29,6 @@ export class CreateHabitDto {
   color?: string;
 
   @IsInt()
-  userId: number;
+  @IsOptional()
+  userId?: number;
 }

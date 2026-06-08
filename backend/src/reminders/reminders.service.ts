@@ -7,29 +7,30 @@ import { UpdateReminderDto } from './dto/update-reminder.dto';
 export class RemindersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createReminderDto: CreateReminderDto) {
+  create(createReminderDto: CreateReminderDto, userId: number) {
     return this.prisma.reminder.create({
       data: {
         title: createReminderDto.title,
         description: createReminderDto.description,
         remindAt: new Date(createReminderDto.remindAt),
         status: createReminderDto.status,
-        userId: createReminderDto.userId,
+        userId,
       },
     });
   }
 
-  findAll() {
+  findAll(userId: number) {
     return this.prisma.reminder.findMany({
+      where: { userId },
       orderBy: {
         remindAt: 'asc',
       },
     });
   }
 
-  async findOne(id: number) {
-    const reminder = await this.prisma.reminder.findUnique({
-      where: { id },
+  async findOne(id: number, userId: number) {
+    const reminder = await this.prisma.reminder.findFirst({
+      where: { id, userId },
     });
 
     if (!reminder) {
@@ -39,8 +40,8 @@ export class RemindersService {
     return reminder;
   }
 
-  async update(id: number, updateReminderDto: UpdateReminderDto) {
-    await this.findOne(id);
+  async update(id: number, updateReminderDto: UpdateReminderDto, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.reminder.update({
       where: { id },
@@ -51,13 +52,12 @@ export class RemindersService {
           ? new Date(updateReminderDto.remindAt)
           : undefined,
         status: updateReminderDto.status,
-        userId: updateReminderDto.userId,
       },
     });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, userId: number) {
+    await this.findOne(id, userId);
 
     return this.prisma.reminder.delete({
       where: { id },
